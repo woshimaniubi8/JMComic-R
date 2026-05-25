@@ -1,0 +1,9 @@
+Package: JMComic
+Version: 1.3.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends:
+Installed-Size: 102400
+Maintainer: tonquer
+Description: A jmcomic comic brower

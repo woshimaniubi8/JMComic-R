@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=JMComic
+Exec=/opt/JMComic/AppRun
+Icon=/opt/JMComic/JMComic.png
+Comment=A jmcomic comic brower
+Terminal=false

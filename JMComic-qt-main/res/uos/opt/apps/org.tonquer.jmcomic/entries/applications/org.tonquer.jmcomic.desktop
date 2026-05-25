@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=Qt;
+Comment=A jmcomic comic brower
+Exec="/opt/apps/org.tonquer.jmcomic/files/AppRun" %U
+GenericName=org.tonquer.jmcomic
+Icon=/opt/apps/org.tonquer.jmcomic/entries/icons/hicolor/192x192/apps/org.tonquer.jmcomic.png
+Name=JMComic
+Type=Application
+X-Deepin-Vendor=user-custom
