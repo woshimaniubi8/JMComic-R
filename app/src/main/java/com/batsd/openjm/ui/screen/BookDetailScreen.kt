@@ -20,11 +20,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
-import android.widget.Toast
 import android.content.ClipboardManager
 import android.content.ClipData
 import android.content.Context
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import com.batsd.openjm.data.api.ApiClientFactory
 import com.batsd.openjm.data.model.BookDetail
 import com.batsd.openjm.data.model.BookEps
@@ -50,6 +50,8 @@ fun BookDetailScreen(
 ) {
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
+    val toast = LocalToast.current
     var localFav by remember { mutableStateOf(false) }
     LaunchedEffect(bookDetail?.isFavorite) { bookDetail?.isFavorite?.let { localFav = it } }
     var localLiked by remember { mutableStateOf(false) }
@@ -148,7 +150,7 @@ fun BookDetailScreen(
                                             .clickable {
                                                 val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                                 cm.setPrimaryClip(ClipData.newPlainText("JM", "JM${detail.id}"))
-                                                Toast.makeText(context, "已复制 JM${detail.id}", Toast.LENGTH_SHORT).show()
+                                                scope.launch { toast("已复制 JM${detail.id}") }
                                             },
                                         shape = MaterialTheme.shapes.small,
                                         color = colorScheme.primaryContainer
@@ -230,7 +232,7 @@ fun BookDetailScreen(
                             // 收藏
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 IconButton(onClick = {
-                                    if (!isLoggedIn) { Toast.makeText(context, "请先登录", Toast.LENGTH_SHORT).show(); return@IconButton }
+                                    if (!isLoggedIn) { scope.launch { toast("请先登录") }; return@IconButton }
                                     onAddFavoriteClick { ok, msg ->
                                         if (ok) localFav = !localFav
                                         resultMessage = msg; showResultDialog = true
@@ -244,7 +246,7 @@ fun BookDetailScreen(
                             // 点赞
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 IconButton(onClick = {
-                                    if (!isLoggedIn) { Toast.makeText(context, "请先登录", Toast.LENGTH_SHORT).show(); return@IconButton }
+                                    if (!isLoggedIn) { scope.launch { toast("请先登录") }; return@IconButton }
                                     onToggleLike { ok, msg ->
                                         if (ok) localLiked = !localLiked
                                         resultMessage = msg; showResultDialog = true
@@ -302,12 +304,12 @@ fun BookDetailScreen(
                 },
                 onPostComment = { text, spoiler ->
                     if (!isLoggedIn) {
-                        Toast.makeText(context, "请先登录", Toast.LENGTH_SHORT).show()
+                        scope.launch { toast("请先登录") }
                         return@CommentSheet
                     }
                     if (currentBookId.isEmpty()) return@CommentSheet
                     postCommentAction(text, spoiler)
-                    Toast.makeText(context, "评论已发送", Toast.LENGTH_SHORT).show()
+                    scope.launch { toast("评论已发送") }
                 },
                 onDismiss = { showComments = false; commentPage = 1 }
             )

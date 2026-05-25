@@ -15,7 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import android.widget.Toast
+import kotlinx.coroutines.launch
 import com.batsd.openjm.data.model.CommentInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,6 +32,8 @@ fun CommentSheet(
     var inputText by remember { mutableStateOf("") }
     var isSpoiler by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val toast = LocalToast.current
     val topComments = comments.filter { it.parentCid == "0" || it.parentCid.isEmpty() }
     val replies = comments.filter { it.parentCid != "0" && it.parentCid.isNotEmpty() }
 
@@ -67,7 +69,7 @@ fun CommentSheet(
                 placeholder = { Text("写评论...") }, modifier = Modifier.weight(1f), maxLines = 3)
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 4.dp)) {
                 IconButton(onClick = {
-                    if (inputText.isBlank()) { Toast.makeText(context, "请输入内容", Toast.LENGTH_SHORT).show(); return@IconButton }
+                    if (inputText.isBlank()) { scope.launch { toast("请输入内容") }; return@IconButton }
                     onPostComment(inputText, isSpoiler); inputText = ""; isSpoiler = false
                 }, enabled = inputText.isNotBlank(), modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Default.Send, "发送", Modifier.size(20.dp))
@@ -87,9 +89,9 @@ fun CommentItem(comment: CommentInfo, subReplies: List<CommentInfo>) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (comment.avatarUrl.isNotEmpty())
                     AsyncImage(model = com.batsd.openjm.data.api.ApiClientFactory.fullImageUrl(comment.avatarUrl),
-                        null, Modifier.size(28.dp).padding(end = 8.dp))
+                        null, Modifier.size(32.dp).padding(end = 8.dp))
                 Column {
-                    Text(comment.displayName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(comment.displayName, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                     if (comment.levelName.isNotEmpty()) Text(comment.levelName, style = MaterialTheme.typography.labelSmall)
                 }
             }
@@ -99,9 +101,14 @@ fun CommentItem(comment: CommentInfo, subReplies: List<CommentInfo>) {
             }
         }
         if (comment.contentText.isNotEmpty())
-            Text(comment.contentText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp, start = 4.dp))
+            Text(comment.contentText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp, start = 4.dp))
+        Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp), horizontalArrangement = Arrangement.End) {
+            if (comment.name.isNotEmpty())
+                Text(comment.name, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.opacity60)
+        }
         subReplies.forEach { r ->
-            Text("↳ ${r.displayName}: ${r.contentText}", style = MaterialTheme.typography.labelSmall,
+            Text("↳ ${r.displayName}: ${r.contentText}", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 20.dp, top = 4.dp), maxLines = 3)
         }

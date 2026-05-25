@@ -19,6 +19,7 @@ import com.batsd.openjm.data.repository.BookRepository
 import com.batsd.openjm.data.repository.CategoryRepository
 import com.batsd.openjm.data.repository.UserRepository
 import com.batsd.openjm.ui.navigation.AppNavigation
+import com.batsd.openjm.ui.components.MaterialToastHost
 import com.batsd.openjm.ui.theme.OpenJMTheme
 import com.batsd.openjm.ui.viewmodel.BookViewModel
 import com.batsd.openjm.ui.viewmodel.CategoryViewModel
@@ -45,6 +46,18 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // 自动登录回调：cookie 过期时用保存的账号密码重登
+        ApiClientFactory.autoLoginCallback = {
+            val creds = prefs.getCredentials()
+            if (creds == null) {
+                android.util.Log.w("MainActivity", "No saved credentials for auto-login")
+                false
+            } else {
+                android.util.Log.i("MainActivity", "Auto-login with saved credentials: ${creds.first}")
+                userRepository.login(creds.first, creds.second).isSuccess
+            }
+        }
+
         val bookViewModel = BookViewModel(bookRepository, prefs)
         val categoryViewModel = CategoryViewModel(categoryRepository)
 
@@ -62,6 +75,7 @@ class MainActivity : ComponentActivity() {
                 .build()
             CompositionLocalProvider(LocalImageLoader provides imageLoader) {
                 OpenJMTheme(darkTheme = isDarkTheme) {
+                    MaterialToastHost {
                     AppNavigation(
                         userViewModel = userViewModel,
                         bookViewModel = bookViewModel,
@@ -74,6 +88,7 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
+                } // MaterialToastHost
             }
         }
     }

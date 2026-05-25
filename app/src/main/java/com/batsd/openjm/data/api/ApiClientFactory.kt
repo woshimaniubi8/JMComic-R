@@ -65,6 +65,10 @@ object ApiClientFactory {
     @Volatile
     var avsToken: String = ""
 
+    /** 自动登录回调：返回 true 表示重登成功，false 失败 */
+    @Volatile
+    var autoLoginCallback: (suspend () -> Boolean)? = null
+
     private val cookieStore = ConcurrentHashMap<String, MutableList<Cookie>>()
 
     fun getInstance(context: Context): JMComicApiService {
@@ -129,10 +133,27 @@ object ApiClientFactory {
             .addInterceptor(createImageRefererInterceptor())
             .authenticator { _, response ->
                 if (response.code == 401 || response.code == 403) {
-                    android.util.Log.w("ApiClientFactory", "Auth failed, clearing cookies")
+                    // 避免循环重试
+                    if (response.request.header("X-Auto-Retry") != null) return@authenticator null
+                    android.util.Log.w("ApiClientFactory", "Auth failed (${response.code}), trying auto-login...")
                     cookieStore.clear()
                     avsToken = ""
-                    null // 返回null让请求失败，UI层会提示
+                    val callback = autoLoginCallback
+                    if (callback != null) {
+                        try {
+                            kotlinx.coroutines.runBlocking {
+                                if (callback()) {
+                                    android.util.Log.i("ApiClientFactory", "Auto-login OK, retrying")
+                                }
+                            }
+                            response.request.newBuilder()
+                                .header("X-Auto-Retry", "1")
+                                .build()
+                        } catch (e: Exception) {
+                            android.util.Log.e("ApiClientFactory", "Auto-login failed", e)
+                            null
+                        }
+                    } else null
                 } else null
             }
             .build()

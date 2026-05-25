@@ -147,4 +147,19 @@ class PreferencesManager(context: Context) {
         sharedPreferences.edit().putString("search_history", list.joinToString("|||")).apply()
     }
     fun clearSearchHistory() { sharedPreferences.edit().remove("search_history").apply() }
+
+    /** 保存登录凭证（用于 cookie 过期时自动重登） */
+    fun saveCredentials(username: String, password: String) {
+        val encoded = android.util.Base64.encodeToString("$username:$password".toByteArray(), android.util.Base64.NO_WRAP)
+        sharedPreferences.edit().putString("auto_login_cred", encoded).apply()
+    }
+    fun getCredentials(): Pair<String, String>? {
+        val encoded = sharedPreferences.getString("auto_login_cred", null) ?: return null
+        return try {
+            val decoded = String(android.util.Base64.decode(encoded, android.util.Base64.NO_WRAP))
+            val parts = decoded.split(":", limit = 2)
+            if (parts.size == 2) Pair(parts[0], parts[1]) else null
+        } catch (_: Exception) { null }
+    }
+    fun clearCredentials() { sharedPreferences.edit().remove("auto_login_cred").apply() }
 }

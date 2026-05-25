@@ -67,6 +67,8 @@ class UserRepository(
                 
                 // 持久化登录状态
                 prefs.saveLoginUser(user)
+                // 保存凭证用于自动续期
+                prefs.saveCredentials(username, password)
                 Result.success(user)
             } else {
                 Log.e(TAG, "Login failed: code=${response.code}, msg=${response.errorMessage()}")
