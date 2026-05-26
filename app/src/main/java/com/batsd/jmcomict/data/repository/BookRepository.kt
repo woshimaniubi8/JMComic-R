@@ -122,8 +122,24 @@ class BookRepository(private val apiService: JMComicApiService) {
         return apiCall({ apiService.getComments(bookId = bookId, page = page) }) { it.decryptAndParse<CommentListData>() }
     }
 
-    suspend fun postComment(bookId: String, content: String, replyTo: String = ""): Result<Unit> {
-        return apiCallSimple { apiService.postComment(bookId = bookId, content = content, replyTo = replyTo) }
+    suspend fun postComment(bookId: String, content: String, replyTo: String = ""): Result<String> {
+        return try {
+            val response = apiService.postComment(bookId = bookId, content = content, replyTo = replyTo)
+            if (!response.isSuccess()) return Result.failure(Exception(response.errorMessage()))
+            val decrypted = response.decryptDataField()
+            if (!decrypted.isNullOrEmpty()) {
+                try {
+                    val obj = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                        .decodeFromString<kotlinx.serialization.json.JsonObject>(decrypted)
+                    val msg = obj["msg"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                        ?: obj["message"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                    if (!msg.isNullOrEmpty()) return Result.success(msg)
+                } catch (_: Exception) {}
+            }
+            Result.success(response.message.ifEmpty { "评论已发送" })
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun getHistory(page: Int = 1): Result<List<BookItem>> {

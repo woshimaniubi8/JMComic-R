@@ -48,7 +48,8 @@ fun BookDetailScreen(
     onToggleLike: (((Boolean, String) -> Unit) -> Unit) = {},
     onLoadComments: () -> Unit = {},
     onLoadMoreComments: (Int) -> Unit = {},
-    onPostComment: (String, Boolean) -> Unit = { _, _ -> }
+    onPostComment: (String, Boolean) -> Unit = { _, _ -> },
+    commentResult: Pair<Boolean, String>? = null
 ) {
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
@@ -63,6 +64,14 @@ fun BookDetailScreen(
     var showComments by remember { mutableStateOf(false) }
     var commentPage by remember { mutableIntStateOf(1) }
     val sheetState = rememberModalBottomSheetState()
+
+    // 评论发送结果 → Dialog（消费后清空，避免重复弹窗）
+    LaunchedEffect(commentResult) {
+        commentResult?.let { (ok, msg) ->
+            resultMessage = msg.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+            showResultDialog = true
+        }
+    }
 
     Scaffold(
         containerColor = colorScheme.background,
@@ -311,7 +320,7 @@ fun BookDetailScreen(
 
     // ===== 评论 BottomSheet =====
     if (showComments) {
-        val postCommentAction = onPostComment  // 捕获避免作用域歧义
+        val postCommentAction = onPostComment
         val currentBookId = bookDetail?.id ?: ""
         ModalBottomSheet(
             onDismissRequest = { showComments = false },
@@ -335,7 +344,7 @@ fun BookDetailScreen(
                     }
                     if (currentBookId.isEmpty()) return@CommentSheet
                     postCommentAction(text, spoiler)
-                    scope.launch { toast("评论已发送") }
+                    // 不立即弹 toast，让 onPostComment 内部处理结果反馈
                 },
                 onDismiss = { showComments = false; commentPage = 1 }
             )

@@ -211,7 +211,7 @@ fun UserProfileScreen(
                         isCheckingIn = true
                         onCheckInClick { ok, msg ->
                             isCheckingIn = false
-                            checkInMessage = msg; showCheckInDialog = true
+                            checkInMessage = msg.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n"); showCheckInDialog = true
                         }
                     }, modifier = Modifier.weight(1f).height(48.dp), shape = MaterialTheme.shapes.medium, enabled = !isCheckingIn) {
                         if (isCheckingIn) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = colorScheme.primary)

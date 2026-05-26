@@ -88,6 +88,7 @@ fun MainScreen(
     val categoryIsLoading by categoryViewModel.isLoading.collectAsState()
     val comments by bookViewModel.comments.collectAsState()
     val commentCount by bookViewModel.commentCount.collectAsState()
+    val commentResult by bookViewModel.commentResult.collectAsState()
     val history by bookViewModel.history.collectAsState()
     val homeSections by bookViewModel.homeSections.collectAsState()
     val user by userViewModel.user.collectAsState()
@@ -167,7 +168,8 @@ fun MainScreen(
                     onToggleLike = { cb -> bookViewModel.toggleLike(id, cb) },
                     onLoadComments = { bookViewModel.getComments(id) },
                     onLoadMoreComments = { page -> bookViewModel.getComments(id, page.toString()) },
-                    onPostComment = { text, _ -> bookViewModel.postComment(id, text) }
+                    onPostComment = { text, _ -> bookViewModel.postComment(id, text) },
+                    commentResult = commentResult
                 )
                 }
             }

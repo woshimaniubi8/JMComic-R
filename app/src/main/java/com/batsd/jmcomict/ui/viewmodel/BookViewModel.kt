@@ -58,6 +58,10 @@ class BookViewModel(
     private val _lastReadChapterId = MutableStateFlow<String?>(null)
     val lastReadChapterId: StateFlow<String?> = _lastReadChapterId
 
+    /** 评论发送结果 (success, message) */
+    private val _commentResult = MutableStateFlow<Pair<Boolean, String>?>(null)
+    val commentResult: StateFlow<Pair<Boolean, String>?> = _commentResult
+
     /** scramble_id — 独立 StateFlow，解决 BookEps.scrambleId 为 class body var 导致 StateFlow 不感知变化的问题
      *  初始值使用 220980 而非 0，确保即使 getChapterViewTemplate 尚未完成也能正确处理图片解密
      *  对照 Qt 项目 jm_config.py，220980 是最常见的 scrambleId 默认值
@@ -106,6 +110,7 @@ class BookViewModel(
 
     fun getBookDetail(bookId: String) {
         currentBookId = bookId
+        _commentResult.value = null  // 清除上次评论结果
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
@@ -262,8 +267,11 @@ class BookViewModel(
     fun postComment(bookId: String, content: String) {
         viewModelScope.launch {
             bookRepository.postComment(bookId, content)
-                .onSuccess { getComments(bookId) }
-                .onFailure { _error.value = it.message }
+                .onSuccess { msg ->
+                    getComments(bookId)
+                    _commentResult.value = true to msg
+                }
+                .onFailure { _commentResult.value = false to (it.message ?: "发送失败") }
         }
     }
 

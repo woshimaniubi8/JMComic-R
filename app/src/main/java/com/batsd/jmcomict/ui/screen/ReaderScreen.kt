@@ -143,53 +143,44 @@ fun ReaderScreen(
                             .graphicsLayer {
                                 scaleX = scale
                                 scaleY = scale
-                                translationX = offsetX
+                                translationX = if (containerSize.width > 0) offsetX.coerceIn(containerSize.width * (1f - scale), 0f) else offsetX
                                 translationY = offsetY
                             }
                             .pointerInput(Unit) {
                                 awaitEachGesture {
                                     awaitFirstDown(requireUnconsumed = false)
-                                    var prevPos = Offset.Zero
+                                    var multiTouch = false
                                     var prevSpan = 0f
                                     var prevCentroid = Offset.Zero
-                                    var pointerCount = 0
-                                    var isZoomed = scale > 1.01f
 
                                     do {
                                         val event = awaitPointerEvent()
                                         val active = event.changes.filter { it.pressed }
-                                        pointerCount = active.size
-
                                         if (active.size >= 2) {
-                                            // 双指：缩放 + 平移
-                                            val pts = active.map { it.position }
-                                            val centroid = pts.reduce { a, b -> a + b } / pts.size.toFloat()
-                                            val span = pts.map { (it - centroid).getDistance() }.average().toFloat()
-
-                                            if (prevSpan > 0f) {
-                                                val zoomChange = span / prevSpan
+                                            if (!multiTouch) {
+                                                multiTouch = true
+                                                val pts = active.map { it.position }
+                                                prevCentroid = pts.reduce { a, b -> a + b } / pts.size.toFloat()
+                                                prevSpan = pts.map { (it - prevCentroid).getDistance() }.average().toFloat()
+                                            } else {
+                                                val pts = active.map { it.position }
+                                                val centroid = pts.reduce { a, b -> a + b } / pts.size.toFloat()
+                                                val span = pts.map { (it - centroid).getDistance() }.average().toFloat()
+                                                val zoomChange = if (prevSpan > 1f) span / prevSpan else 1f
                                                 scale = (scale * zoomChange).coerceIn(1f, 5f)
-                                                offsetX += centroid.x - prevCentroid.x
-                                                offsetY += centroid.y - prevCentroid.y
+                                                if (scale > 1.01f) {
+                                                    offsetX += centroid.x - prevCentroid.x
+                                                    offsetY += centroid.y - prevCentroid.y
+                                                } else {
+                                                    offsetX = 0f; offsetY = 0f
+                                                }
+                                                prevCentroid = centroid
+                                                prevSpan = span
                                             }
-                                            prevCentroid = centroid
-                                            prevSpan = span
                                             active.forEach { it.consume() }
-                                        } else if (active.size == 1 && isZoomed) {
-                                            // 单指 + 已缩放：平移画面
-                                            val pos = active.first().position
-                                            if (prevPos != Offset.Zero) {
-                                                offsetX += pos.x - prevPos.x
-                                                offsetY += pos.y - prevPos.y
-                                            }
-                                            prevPos = pos
-                                            active.forEach { it.consume() }
-                                        } else {
-                                            prevPos = Offset.Zero
                                         }
                                     } while (event.changes.any { it.pressed })
 
-                                    // 缩放复位时清空偏移
                                     if (scale <= 1.01f) { offsetX = 0f; offsetY = 0f }
                                 }
                             }
