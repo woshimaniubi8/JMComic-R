@@ -19,3 +19,4 @@ output-metadata.json
 .externalNativeBuild
 .cxx
 local.properties
+/.kotlin
