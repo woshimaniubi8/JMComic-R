@@ -4,6 +4,15 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// 从 local.properties 加载签名配置
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { stream ->
+        localProperties.load(stream)
+    }
+}
+
 android {
     namespace 'com.batsd.jmcomict'
     compileSdk {
@@ -30,12 +39,10 @@ android {
     }
     signingConfigs {
         release {
-            // You need to specify either an absolute path or include the
-            // keystore file in the same directory as the build.gradle file.
-            storeFile file("D:\\AndroidProjects\\aliss_key0_pass_123456.jks")
-            storePassword "123456"
-            keyAlias "key0"
-            keyPassword "123456"
+            storeFile file(localProperties.getProperty("keystore.path", ""))
+            storePassword localProperties.getProperty("keystore.password", "")
+            keyAlias localProperties.getProperty("key.alias", "")
+            keyPassword localProperties.getProperty("key.password", "")
         }
     }
     buildTypes {

@@ -236,6 +236,22 @@ fun BookDetailScreen(
                         }
                     }
 
+                    // ===== 出场角色 =====
+                    if (detail.actors.isNotEmpty()) {
+                        item {
+                            InfoHeader(title = "出场角色", icon = Icons.Default.Person)
+                            FlowRow(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                detail.actors.forEach { actor ->
+                                    CommonChip(label = actor)
+                                }
+                            }
+                        }
+                    }
+
                     // ===== 统计 =====
                     item {
                         Row(
