@@ -77,6 +77,7 @@ class PreferencesManager(context: Context) {
             remove("favorites")
             remove("exp")
             remove("avs_token")
+            remove("auto_login_cred")
             putBoolean("is_login", false)
             commit()
         }
@@ -117,7 +118,7 @@ class PreferencesManager(context: Context) {
     }
 
     // CDN/分流切换 (0=默认, 1/2/3=备用)
-    fun getCdnIndex(): Int = sharedPreferences.getInt("cdn_index", 0)
+    fun getCdnIndex(): Int = sharedPreferences.getInt("cdn_index", 2)  // 默认分流3
     fun setCdnIndex(index: Int) { sharedPreferences.edit().putInt("cdn_index", index).apply() }
 
     // 主题切换
@@ -162,4 +163,8 @@ class PreferencesManager(context: Context) {
         } catch (_: Exception) { null }
     }
     fun clearCredentials() { sharedPreferences.edit().remove("auto_login_cred").apply() }
+
+    /** 首次运行免责声明同意状态 */
+    fun hasAgreedDisclaimer(): Boolean = sharedPreferences.getBoolean("agreed_disclaimer", false)
+    fun setAgreedDisclaimer(agreed: Boolean) { sharedPreferences.edit().putBoolean("agreed_disclaimer", agreed).apply() }
 }

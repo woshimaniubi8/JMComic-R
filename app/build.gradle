@@ -11,13 +11,20 @@ android {
             minorApiLevel = 1
         }
     }
-
+    // splits {
+    //     abi {
+    //             enable true
+    //             reset()
+    //             include  'armeabi-v7a','arm64-v8a','x86','x86_64'//这里想要什么架构的apk就加哪个
+    //             universalApk true
+    //         }
+    // }
     defaultConfig {
         applicationId "com.batsd.jmcomict"
         minSdk 24
         targetSdk 36
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

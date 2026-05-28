@@ -5,152 +5,244 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.rememberCoroutineScope
+import com.batsd.jmcomict.R
 import com.batsd.jmcomict.ui.components.*
+import kotlinx.coroutines.launch
 
-/**
- * 设置界面 — FlClash ListItem 风格
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    cdnName: String = "主线路",
+    cdnName: String = "分流1",
+    cdnIndex: Int = 0,
+    cdnCount: Int = 4,
     isDarkTheme: Boolean = false,
     themeMode: Int = 0,
     isLoggedIn: Boolean = false,
     onBackClick: () -> Unit,
-    onSwitchCdn: () -> Unit,
+    onSelectCdn: (Int) -> Unit,
     onSetThemeMode: (Int) -> Unit,
-    onLogoutClick: () -> Unit
+    onLogoutClick: () -> Unit,
+    onLineTestClick: (() -> Unit)? = null,
+    onShowDisclaimer: (() -> Unit)? = null,
+    onAboutClick: (() -> Unit)? = null
 ) {
     var showCdnDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
     val colorScheme = MaterialTheme.colorScheme
+    val modeNames = listOf("跟随系统", "浅色", "深色")
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val versionName = remember {
+        try {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+        } catch (e: Exception) {
+            ""
+        }
+    }
+    val userAgreementLabel = stringResource(R.string.user_agreement)
+    val aboutLabel = stringResource(R.string.about)
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("设置") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = colorScheme.surface
+                )
+            )
+        },
         containerColor = colorScheme.background
     ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 顶部栏
+            item { InfoHeader(title = "网络", icon = Icons.Default.Language) }
             item {
-                TopAppBar(
-                    title = { Text("设置") },
-                    navigationIcon = {
-                        IconButton(onClick = onBackClick) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                CommonCard(variant = CardVariant.Filled, onClick = { showCdnDialog = true }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.SwapHoriz, null, Modifier.size(20.dp), tint = colorScheme.primary)
+                            Spacer(Modifier.width(12.dp))
+                            Text("分流切换", style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = colorScheme.surface
-                    )
-                )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(cdnName, style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant.opacity60)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = colorScheme.onSurfaceVariant.opacity38)
+                        }
+                    }
+                }
             }
-
-            // 分流切换
             item {
-                CommonListItem(
-                    title = "分流切换",
-                    subtitle = "当前: $cdnName",
-                    leading = {
-                        Icon(
-                            Icons.Default.Language,
-                            null,
-                            modifier = Modifier.size(22.dp),
-                            tint = colorScheme.primary
-                        )
-                    },
-                    showChevron = true,
-                    onClick = { showCdnDialog = true }
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = colorScheme.outlineVariant.opacity50
-                )
+                CommonCard(variant = CardVariant.Filled, onClick = { onLineTestClick?.invoke() }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Speed, null, Modifier.size(20.dp), tint = colorScheme.primary)
+                            Spacer(Modifier.width(12.dp))
+                            Text("线路测试", style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
+                        }
+                        Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = colorScheme.onSurfaceVariant.opacity38)
+                    }
+                }
             }
-
-            // 主题模式
+            item { Spacer(Modifier.height(8.dp)); InfoHeader(title = "外观", icon = Icons.Default.Palette) }
             item {
-                val modeNames = listOf("跟随系统", "浅色", "深色")
-                CommonListItem(
-                    title = "主题模式",
-                    subtitle = modeNames[themeMode.coerceIn(0, 2)],
-                    leading = {
-                        Icon(
-                            if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
-                            null,
-                            modifier = Modifier.size(22.dp),
-                            tint = colorScheme.primary
-                        )
-                    },
-                    showChevron = true,
-                    onClick = { showThemeDialog = true }
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = colorScheme.outlineVariant.opacity50
-                )
+                CommonCard(variant = CardVariant.Filled, onClick = { showThemeDialog = true }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode, null, Modifier.size(20.dp), tint = colorScheme.primary)
+                            Spacer(Modifier.width(12.dp))
+                            Text("主题模式", style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(modeNames[themeMode.coerceIn(0, 2)], style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant.opacity60)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = colorScheme.onSurfaceVariant.opacity38)
+                        }
+                    }
+                }
             }
 
-            // 退出登录 (仅登录后显示)
             if (isLoggedIn) {
-            item {
-                CommonListItem(
-                    title = "退出登录",
-                    leading = {
-                        Icon(
-                            Icons.Default.Logout,
-                            null,
-                            modifier = Modifier.size(22.dp),
-                            tint = colorScheme.error.copy(alpha = 0.7f)
-                        )
-                    },
-                    onClick = onLogoutClick
-                )
+                item { Spacer(Modifier.height(8.dp)); InfoHeader(title = "账户", icon = Icons.Default.Person) }
+                item {
+                    CommonCard(variant = CardVariant.Filled, onClick = onLogoutClick) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Logout, null, Modifier.size(20.dp), tint = colorScheme.error.copy(alpha = 0.7f))
+                            Spacer(Modifier.width(12.dp))
+                            Text("退出登录", style = MaterialTheme.typography.bodyMedium, color = colorScheme.error)
+                        }
+                    }
+                }
             }
-            } // end if(isLoggedIn)
+            item { Spacer(Modifier.height(8.dp)); InfoHeader(title = "更多", icon = Icons.Default.Info) }
+            item {
+                CommonCard(variant = CardVariant.Filled, onClick = {
+                    if (onShowDisclaimer != null) {
+                        onShowDisclaimer()
+                    } else {
+                        scope.launch { toast(userAgreementLabel) }
+                    }
+                }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Policy, null, Modifier.size(20.dp), tint = colorScheme.primary)
+                            Spacer(Modifier.width(12.dp))
+                            Text(stringResource(R.string.user_agreement), style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
+                        }
+                        Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = colorScheme.onSurfaceVariant.opacity38)
+                    }
+                }
+            }
+            item {
+                CommonCard(variant = CardVariant.Filled, onClick = {
+                    if (onAboutClick != null) {
+                        onAboutClick()
+                    } else {
+                        showAboutDialog = true
+                    }
+                }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Info, null, Modifier.size(20.dp), tint = colorScheme.primary)
+                            Spacer(Modifier.width(12.dp))
+                            Text(stringResource(R.string.about), style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("v${versionName.ifEmpty { "?" }}", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant.opacity60)
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = colorScheme.onSurfaceVariant.opacity38)
+                        }
+                    }
+                }
+            }
         }
     }
 
-    // ===== CDN 选择对话框 =====
     if (showCdnDialog) {
         AlertDialog(
             onDismissRequest = { showCdnDialog = false },
-            confirmButton = {
-                TextButton(onClick = { showCdnDialog = false }) {
-                    Text("取消")
-                }
-            },
+            confirmButton = { TextButton(onClick = { showCdnDialog = false }) { Text("取消") } },
             title = { Text("选择线路") },
             shape = MaterialTheme.shapes.medium,
             containerColor = colorScheme.surfaceContainerHigh,
             text = {
                 Column {
-                    listOf("主线路", "备用线路1", "备用线路2").forEach { name ->
+                    (0 until cdnCount).forEach { index ->
+                        val label = "分流${index + 1}"
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onSwitchCdn()
-                                    showCdnDialog = false
-                                }
+                            Modifier.fillMaxWidth()
+                                .clickable { onSelectCdn(index); showCdnDialog = false }
                                 .padding(horizontal = 12.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RadioButton(
-                                selected = cdnName == name,
-                                onClick = null
-                            )
+                            RadioButton(selected = cdnIndex == index, onClick = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(label, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    if (showThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            confirmButton = { TextButton(onClick = { showThemeDialog = false }) { Text("取消") } },
+            title = { Text("选择主题") },
+            shape = MaterialTheme.shapes.medium,
+            containerColor = colorScheme.surfaceContainerHigh,
+            text = {
+                Column {
+                    listOf("跟随系统", "浅色", "深色").forEachIndexed { index, name ->
+                        Row(Modifier.fillMaxWidth().clickable { onSetThemeMode(index); showThemeDialog = false }.padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = themeMode == index, onClick = null)
                             Spacer(Modifier.width(12.dp))
                             Text(name, style = MaterialTheme.typography.bodyLarge)
                         }
@@ -160,43 +252,24 @@ fun SettingsScreen(
         )
     }
 
-    // ===== 主题选择对话框 =====
-    if (showThemeDialog) {
+    if (showAboutDialog) {
         AlertDialog(
-            onDismissRequest = { showThemeDialog = false },
-            confirmButton = {
-                TextButton(onClick = { showThemeDialog = false }) {
-                    Text("取消")
+            onDismissRequest = { showAboutDialog = false },
+            confirmButton = { TextButton(onClick = { showAboutDialog = false }) { Text(stringResource(R.string.confirm)) } },
+            title = { Text(stringResource(R.string.about_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.about_content))
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "v${versionName.ifEmpty { "?" }}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant
+                    )
                 }
             },
-            title = { Text("选择主题") },
             shape = MaterialTheme.shapes.medium,
             containerColor = colorScheme.surfaceContainerHigh,
-            text = {
-            Column {
-                listOf("跟随系统", "浅色", "深色").forEachIndexed { index, name ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onSetThemeMode(index)
-                                showThemeDialog = false
-                            }
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = themeMode == index,
-                            onClick = null
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(name, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-            }
         )
     }
 }
-
-

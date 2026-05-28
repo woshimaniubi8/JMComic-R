@@ -11,6 +11,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.isSystemInDarkTheme
+import com.batsd.jmcomict.ui.components.DisclaimerDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.batsd.jmcomict.R
 import coil.ImageLoader
 import coil.compose.LocalImageLoader
 import com.batsd.jmcomict.data.api.ApiClientFactory
@@ -31,10 +41,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val prefs = PreferencesManager(this)
-        val apiService = ApiClientFactory.getInstance(this)
-        val userRepository = UserRepository(apiService, prefs)
-        val bookRepository = BookRepository(apiService)
-        val categoryRepository = CategoryRepository(apiService)
+        ApiClientFactory.init(this)
+        val userRepository = UserRepository(prefs)
+        val bookRepository = BookRepository()
+        val categoryRepository = CategoryRepository()
 
         val userViewModel = UserViewModel(userRepository)
         val savedUser = prefs.getSavedUser()
@@ -76,16 +86,30 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalImageLoader provides imageLoader) {
                 OpenJMTheme(darkTheme = isDarkTheme) {
                     MaterialToastHost {
-                    AppNavigation(
+                        var showDisclaimer by remember { mutableStateOf(!prefs.hasAgreedDisclaimer()) }
+                        DisclaimerDialog(
+                            visible = showDisclaimer,
+                            onAgree = {
+                                prefs.setAgreedDisclaimer(true)
+                                showDisclaimer = false
+                            },
+                            onDisagree = {
+                                finish()
+                            }
+                        )
+
+                        AppNavigation(
                         userViewModel = userViewModel,
                         bookViewModel = bookViewModel,
                         categoryViewModel = categoryViewModel,
+                        prefs = prefs,
                         isDarkTheme = isDarkTheme,
                         themeMode = currentThemeMode,
                         onSetThemeMode = { mode ->
                             currentThemeMode = mode
                             prefs.setThemeMode(mode)
-                        }
+                        },
+                        onShowDisclaimer = { showDisclaimer = true }
                     )
                 }
                 } // MaterialToastHost

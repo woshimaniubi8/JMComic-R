@@ -11,7 +11,8 @@ import com.batsd.jmcomict.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class BookRepository(private val apiService: JMComicApiService) {
+class BookRepository {
+    private val apiService: JMComicApiService get() = ApiClientFactory.getApiService()
 
     suspend fun getLatest(page: String = "0"): Result<List<BookItem>> {
         return apiCall({ apiService.getLatest(page) }) { it.decryptAndParseList<BookItem>() }

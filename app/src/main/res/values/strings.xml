@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">JMComic-R</string>
+    <string name="disclaimer_title">免责声明</string>
+    <string name="disclaimer_text">本项目仅供研究学习使用，我们不会收集您的个人数据，您的数据均在本地保存。\n\n本软件与JMComic、禁漫天堂无任何隶属关系，仅为基于JM API二次开发的一个第三方客户端，软件内的内容与本人无关，本人对软件内的内容不负任何责任，如有不适请及时停止阅读并寻求帮助。\n\n若您使用本软件则视为您同意此协议</string>
+    <string name="agree">同意</string>
+    <string name="confirm">确定</string>
+    <string name="disagree">不同意</string>
+    <string name="user_agreement">用户协议</string>
+    <string name="about">关于</string>
+    <string name="about_title">关于 JMComic-R</string>
+    <string name="about_content">一个第三方JM客户端</string>
 </resources>

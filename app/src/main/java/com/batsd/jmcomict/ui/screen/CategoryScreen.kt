@@ -25,7 +25,7 @@ fun CategoryScreen(
     categories: List<Category>,
     isLoading: Boolean,
     onBackClick: () -> Unit,
-    onCategoryClick: (String) -> Unit
+    onCategoryClick: (String, String) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
 
@@ -78,7 +78,7 @@ fun CategoryScreen(
                             ) { _, category ->
                                 CategoryCard(
                                     category = category,
-                                    onClick = { onCategoryClick(category.id) }
+                                    onClick = { onCategoryClick(category.id, category.name) }
                                 )
                             }
                         }

@@ -11,9 +11,9 @@ import kotlinx.serialization.json.JsonPrimitive
  * 用户仓库
  */
 class UserRepository(
-    private val apiService: JMComicApiService,
     internal val prefs: com.batsd.jmcomict.data.local.PreferencesManager
 ) {
+    private val apiService: JMComicApiService get() = ApiClientFactory.getApiService()
 
     companion object {
         private const val TAG = "UserRepository"

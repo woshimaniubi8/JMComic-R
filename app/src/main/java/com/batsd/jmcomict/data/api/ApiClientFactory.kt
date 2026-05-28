@@ -27,25 +27,46 @@ object ApiClientFactory {
 
     private var apiService: JMComicApiService? = null
     private var okHttpClient: OkHttpClient? = null
-    private const val BASE_URL = "https://www.cdnhth.club/"
-    /** Web 端 AJAX API 基础 URL（点赞等） */
-    const val WEB_BASE_URL = "https://jmcomic-zzz.one/"
-    /** 图片 CDN 基础 URL，用于拼接章节图片链接 */
-    private const val IMAGE_BASE_URL = "https://cdn-msp.jmapiproxy3.cc"
-    
-    /** 备用 CDN 列表 */
-    private val CDN_LIST = listOf(
-        "https://cdn-msp.jmapiproxy3.cc",
-        "https://cdn-msp.jmdanjonproxy.xyz",
-        "https://cdn-msp.jmspmobiaso2rx.xyz"
+    @Volatile
+    private var appContext: Context? = null
+
+    /** 初始化（在 Application/Activity 中调用） */
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    /** 获取 API 服务实例（无需 Context 参数） */
+    fun getApiService(): JMComicApiService {
+        val ctx = appContext ?: error("ApiClientFactory not initialized. Call init(context) first.")
+        return getInstance(ctx)
+    }
+    /** API 基址列表（对应原版 Url2List） */
+    private val API_URL_LIST = listOf(
+        "https://www.cdnhth.club/",   // 分流1
+        "https://www.cdngwc.cc/",     // 分流2
+        "https://www.cdnhth.net/",    // 分流3
+        "https://www.cdnbea.net/"     // 分流4
     )
     @Volatile
-    private var currentCdnIndex = 0
+    private var currentBaseUrl: String = API_URL_LIST[0]
+    private var lastBaseUrl: String = API_URL_LIST[0]
+    /** Web 端 AJAX API 基础 URL（点赞等） */
+    const val WEB_BASE_URL = "https://jmcomic-zzz.one/"
+    /** 图片 CDN 基础 URL 列表（对应原版 PicUrlList） */
+    private val CDN_LIST = listOf(
+        "https://cdn-msp.jmapiproxy1.cc",   // 分流1
+        "https://cdn-msp.jmapiproxy3.cc",   // 分流2
+        "https://cdn-msp.jmapinodeudzn.net", // 分流3
+        "https://cdn-msp.jmdanjonproxy.xyz"  // 分流4
+    )
+    @Volatile
+    private var currentCdnIndex = 2  // 默认分流3
 
     /** 从持久化恢复 CDN */
     @JvmStatic
     fun restoreCdnIndex(index: Int) {
         currentCdnIndex = index.coerceIn(0, CDN_LIST.lastIndex)
+        currentBaseUrl = API_URL_LIST[currentCdnIndex]
     }
     /** 图片 CDN 主机名，用于 Referer 拦截器匹配 */
     private const val IMAGE_CDN_HOST = "cdn-msp.jmapiproxy3.cc"
@@ -78,8 +99,10 @@ object ApiClientFactory {
     private val cookieStore = ConcurrentHashMap<String, MutableList<Cookie>>()
 
     fun getInstance(context: Context): JMComicApiService {
-        if (apiService == null) {
+        // 如果 baseUrl 已变更（切换分流后），重建 Retrofit
+        if (apiService == null || currentBaseUrl != lastBaseUrl) {
             apiService = createRetrofit(context).create(JMComicApiService::class.java)
+            lastBaseUrl = currentBaseUrl
         }
         return apiService!!
     }
@@ -102,8 +125,9 @@ object ApiClientFactory {
                 override fun loadForRequest(url: HttpUrl) =
                     cookieStore[url.host] ?: emptyList()
                 override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                    cookieStore.getOrPut(url.host) { mutableListOf() }.let { existing ->
-                        cookies.forEach { cookie ->
+                    val existing = cookieStore.getOrPut(url.host) { mutableListOf() }
+                    synchronized(existing) {
+                        for (cookie in cookies) {
                             existing.removeAll { it.name == cookie.name }
                             if (cookie.expiresAt == 0L || cookie.expiresAt > System.currentTimeMillis()) {
                                 existing.add(cookie)
@@ -118,7 +142,7 @@ object ApiClientFactory {
 
     private fun createRetrofit(context: Context): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(currentBaseUrl)
             .client(createOkHttpClient(context))
             .addConverterFactory(createJsonConverter().asConverterFactory("application/json".toMediaType()))
             .build()
@@ -149,10 +173,12 @@ object ApiClientFactory {
                 }
                 override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
                     val existing = cookieStore.getOrPut(url.host) { mutableListOf() }
-                    for (cookie in cookies) {
-                        existing.removeAll { it.name == cookie.name }
-                        if (cookie.expiresAt == 0L || cookie.expiresAt > System.currentTimeMillis()) {
-                            existing.add(cookie)
+                    synchronized(existing) {
+                        for (cookie in cookies) {
+                            existing.removeAll { it.name == cookie.name }
+                            if (cookie.expiresAt == 0L || cookie.expiresAt > System.currentTimeMillis()) {
+                                existing.add(cookie)
+                            }
                         }
                     }
                     cookies.find { it.name == "AVS" }?.let { avsToken = it.value }
@@ -261,7 +287,7 @@ object ApiClientFactory {
             val host = request.url.host
             if (host.contains("jmapiproxy") || host.contains("cdn")) {
                 val newRequest = request.newBuilder()
-                    .header("Referer", BASE_URL)
+                    .header("Referer", currentBaseUrl)
                     .build()
                 chain.proceed(newRequest)
             } else {
@@ -307,25 +333,38 @@ object ApiClientFactory {
     /** 将相对图片路径转为完整 URL */
     fun fullImageUrl(relativePath: String): String {
         if (relativePath.startsWith("http")) return relativePath
-        return BASE_URL + relativePath
+        return currentBaseUrl + relativePath
     }
 
     /** 获取图片 CDN 基础 URL (用于拼接章节图片链接) */
     fun getImageBaseUrl(): String = CDN_LIST[currentCdnIndex.coerceIn(0, CDN_LIST.lastIndex)]
 
-    /** 切换 CDN (返回新的 CDN URL) */
-    fun switchCdn(): String {
-        currentCdnIndex = (currentCdnIndex + 1) % CDN_LIST.size
-        return CDN_LIST[currentCdnIndex]
+    /** 设置 CDN 分流索引（同步切换 API 基址和图片 CDN） */
+    fun setCdnIndex(index: Int) {
+        currentCdnIndex = index.coerceIn(0, CDN_LIST.lastIndex)
+        currentBaseUrl = API_URL_LIST[currentCdnIndex]
     }
 
+    /** 获取当前 CDN 索引 */
+    fun getCurrentCdnIndex(): Int = currentCdnIndex
+
+    /** 获取 CDN 分流总数 */
+    fun getCdnCount(): Int = CDN_LIST.size
+
     /** 获取当前 CDN 名称 */
-    fun getCurrentCdnName(): String = when (currentCdnIndex) {
-        0 -> "主线路"
-        1 -> "备用线路1"
-        2 -> "备用线路2"
-        else -> "未知"
-    }
+    fun getCurrentCdnName(): String = "分流${currentCdnIndex + 1}"
+
+    /** 获取 API 基址列表（供线路测试使用） */
+    fun getApiUrlList(): List<String> = API_URL_LIST
+
+    /** 获取 API 基址列表的显示名称 */
+    fun getApiUrlNames(): List<String> = API_URL_LIST.indices.map { "分流${it + 1}" }
+
+    /** 获取图片 CDN 列表（供线路测试使用） */
+    fun getCdnUrlList(): List<String> = CDN_LIST
+
+    /** 获取图片 CDN 列表的显示名称 */
+    fun getCdnUrlNames(): List<String> = CDN_LIST.indices.map { "图片分流${it + 1}" }
 
     /** 设置 AVS 会话令牌 (登录后调用) — 自动更新 avsToken 属性 */
     fun saveAvsToken(token: String) {

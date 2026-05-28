@@ -1,6 +1,7 @@
 ﻿package com.batsd.jmcomict.ui.screen
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -62,8 +63,14 @@ fun BookDetailScreen(
     var showResultDialog by remember { mutableStateOf(false) }
     var resultMessage by remember { mutableStateOf("") }
     var showComments by remember { mutableStateOf(false) }
+    var commentsLoading by remember { mutableStateOf(false) }
     var commentPage by remember { mutableIntStateOf(1) }
     val sheetState = rememberModalBottomSheetState()
+
+    // 评论加载完成后重置加载状态
+    LaunchedEffect(comments) {
+        if (comments.isNotEmpty()) commentsLoading = false
+    }
 
     // 评论发送结果 → Dialog（消费后清空，避免重复弹窗）
     LaunchedEffect(commentResult) {
@@ -294,8 +301,27 @@ fun BookDetailScreen(
                             }
                             // 评论
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                IconButton(onClick = { showComments = true; onLoadComments() }, modifier = Modifier.size(48.dp)) {
-                                    Icon(Icons.Default.ChatBubbleOutline, null, Modifier.size(22.dp), tint = colorScheme.onSurfaceVariant)
+                                IconButton(onClick = {
+                                    commentsLoading = true
+                                    showComments = true
+                                    onLoadComments()
+                                }, modifier = Modifier.size(48.dp)) {
+                                    AnimatedContent(
+                                        targetState = commentsLoading,
+                                        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                                        label = "comment_loading"
+                                    ) { loading ->
+                                        if (loading) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(20.dp),
+                                                strokeWidth = 2.dp,
+                                                color = colorScheme.primary
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.ChatBubbleOutline, "评论", Modifier.size(22.dp),
+                                                tint = colorScheme.onSurfaceVariant)
+                                        }
+                                    }
                                 }
                                 Text("评论", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
                             }

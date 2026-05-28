@@ -1,12 +1,14 @@
 ﻿package com.batsd.jmcomict.data.repository
 
+import com.batsd.jmcomict.data.api.ApiClientFactory
 import com.batsd.jmcomict.data.api.ApiResponse
 import com.batsd.jmcomict.data.api.BookListData
 import com.batsd.jmcomict.data.api.CategoryWrapper
 import com.batsd.jmcomict.data.api.JMComicApiService
 import com.batsd.jmcomict.data.model.*
 
-class CategoryRepository(private val apiService: JMComicApiService) {
+class CategoryRepository {
+    private val apiService: JMComicApiService get() = ApiClientFactory.getApiService()
 
     suspend fun getCategories(): Result<List<Category>> {
         return try {

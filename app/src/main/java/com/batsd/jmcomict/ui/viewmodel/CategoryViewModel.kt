@@ -57,6 +57,8 @@ class CategoryViewModel(private val categoryRepository: CategoryRepository) : Vi
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
+            // 立即清除旧数据，防止切换到新分类时闪现旧内容
+            _categoryBooks.value = emptyList()
             categoryRepository.getBooksByCategory(categoryId, page, sort)
                 .onSuccess { data ->
                     _categoryBooks.value = data.content

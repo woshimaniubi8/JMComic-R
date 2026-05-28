@@ -1,9 +1,11 @@
 ﻿package com.batsd.jmcomict.data.repository
 
+import com.batsd.jmcomict.data.api.ApiClientFactory
 import com.batsd.jmcomict.data.api.CommentListData
 import com.batsd.jmcomict.data.api.JMComicApiService
 
-class CommentRepository(private val apiService: JMComicApiService) {
+class CommentRepository {
+    private val apiService: JMComicApiService get() = ApiClientFactory.getApiService()
 
     suspend fun getComments(bookId: String, page: String = "1"): Result<CommentListData> {
         return try {

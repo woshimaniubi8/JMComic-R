@@ -3,6 +3,7 @@
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,6 +21,7 @@ import com.batsd.jmcomict.ui.viewmodel.BookViewModel
 import com.batsd.jmcomict.ui.viewmodel.CategoryViewModel
 import com.batsd.jmcomict.ui.viewmodel.UserViewModel
 import com.batsd.jmcomict.data.api.ApiClientFactory
+import com.batsd.jmcomict.data.local.PreferencesManager
 
 data class NavItem(val label: String, val icon: ImageVector, val screen: MainTab)
 enum class MainTab { Home, Search, Favorites, Profile }
@@ -28,9 +30,11 @@ sealed class SubScreen {
     data class BookDetail(val bookId: String) : SubScreen()
     data class Reader(val epsId: String) : SubScreen()
     object Category : SubScreen()
+    data class CategoryBooks(val categoryId: String, val categoryName: String) : SubScreen()
     object Login : SubScreen()
     object Settings : SubScreen()
     object History : SubScreen()
+    object LineTest : SubScreen()
 }
 
 val navItems = listOf(
@@ -45,11 +49,13 @@ fun AppNavigation(
     userViewModel: UserViewModel,
     bookViewModel: BookViewModel,
     categoryViewModel: CategoryViewModel,
+    prefs: PreferencesManager,
     isDarkTheme: Boolean = false,
     themeMode: Int = 0,
-    onSetThemeMode: (Int) -> Unit = {}
+    onSetThemeMode: (Int) -> Unit = {},
+    onShowDisclaimer: (() -> Unit)? = null
 ) {
-    MainScreen(userViewModel, bookViewModel, categoryViewModel, isDarkTheme, themeMode, onSetThemeMode)
+    MainScreen(userViewModel, bookViewModel, categoryViewModel, prefs, isDarkTheme, themeMode, onSetThemeMode, onShowDisclaimer)
 }
 
 @Composable
@@ -57,16 +63,22 @@ fun MainScreen(
     userViewModel: UserViewModel,
     bookViewModel: BookViewModel,
     categoryViewModel: CategoryViewModel,
+    prefs: PreferencesManager,
     isDarkTheme: Boolean,
     themeMode: Int,
-    onSetThemeMode: (Int) -> Unit
+    onSetThemeMode: (Int) -> Unit,
+    onShowDisclaimer: (() -> Unit)? = null
 ) {
     var selectedTab by remember { mutableStateOf(MainTab.Home) }
     var subScreen by remember { mutableStateOf<SubScreen>(SubScreen.None) }
     var previousSubScreen by remember { mutableStateOf<SubScreen>(SubScreen.None) }
     var searchHistory by remember { mutableStateOf(emptyList<String>()) }
     var selectedSection by remember { mutableIntStateOf(0) }
+    // 同步恢复 CDN 分流索引
+    val initialCdnIndex = prefs.getCdnIndex().coerceIn(0, ApiClientFactory.getCdnCount() - 1)
+    ApiClientFactory.restoreCdnIndex(initialCdnIndex)
     var cdnName by remember { mutableStateOf(ApiClientFactory.getCurrentCdnName()) }
+    var cdnIndex by remember { mutableIntStateOf(ApiClientFactory.getCurrentCdnIndex()) }
     val userIsLoading by userViewModel.isLoading.collectAsState()
     val userError by userViewModel.error.collectAsState()
 
@@ -74,6 +86,12 @@ fun MainScreen(
     BackHandler(enabled = subScreen !is SubScreen.None) {
         when (subScreen) {
             is SubScreen.Reader -> subScreen = previousSubScreen.also { previousSubScreen = SubScreen.None }
+            is SubScreen.CategoryBooks -> subScreen = SubScreen.Category
+            is SubScreen.BookDetail -> {
+                val prev = previousSubScreen
+                previousSubScreen = SubScreen.None
+                subScreen = prev
+            }
             else -> subScreen = SubScreen.None
         }
     }
@@ -92,17 +110,6 @@ fun MainScreen(
     val history by bookViewModel.history.collectAsState()
     val homeSections by bookViewModel.homeSections.collectAsState()
     val user by userViewModel.user.collectAsState()
-    val categoryBooks by categoryViewModel.categoryBooks.collectAsState()
-    var pendingCategory by remember { mutableStateOf(false) }
-
-    // 分类选择后同步书单到首页
-    LaunchedEffect(categoryBooks) {
-        if (pendingCategory && categoryBooks.isNotEmpty()) {
-            bookViewModel.setBooks(categoryBooks)
-            pendingCategory = false
-        }
-    }
-
     LaunchedEffect(selectedTab) {
         when (selectedTab) {
             MainTab.Home -> if (bookList.isEmpty()) bookViewModel.getHomeSections()
@@ -120,12 +127,21 @@ fun MainScreen(
         }
     }
 
+    val bgColor = MaterialTheme.colorScheme.background
+
     // ===== 子页面渲染（带动画）=====
+    Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
     AnimatedContent(
         targetState = subScreen,
+        modifier = Modifier.fillMaxSize(),
         transitionSpec = {
-            if (targetState is SubScreen.None) {
-                // 返回主屏：向右滑出
+            val isGoingBack = targetState is SubScreen.None ||
+                (initialState is SubScreen.CategoryBooks && targetState is SubScreen.Category) ||
+                (initialState is SubScreen.BookDetail && targetState !is SubScreen.Reader) ||
+                (initialState is SubScreen.LineTest && targetState is SubScreen.Settings) ||
+                (initialState is SubScreen.Reader)
+            if (isGoingBack) {
+                // 返回：向右滑出
                 (fadeIn(tween(200)) + slideInHorizontally(tween(200)) { -it / 3 })
                     .togetherWith(fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { it / 3 })
             } else {
@@ -151,7 +167,7 @@ fun MainScreen(
                     onBackClick = {
                         val prev = previousSubScreen
                         previousSubScreen = SubScreen.None
-                        subScreen = prev.let { SubScreen.None }
+                        subScreen = prev
                     },
                     onEpisodeClick = { ep ->
                         bookViewModel.getEpisodeDetail(ep.epsId)
@@ -184,13 +200,28 @@ fun MainScreen(
             is SubScreen.Category -> CategoryScreen(
                 categories = categories, isLoading = categoryIsLoading,
                 onBackClick = { subScreen = SubScreen.None },
-                onCategoryClick = { cid ->
-                    pendingCategory = true
+                onCategoryClick = { cid, cname ->
+                    categoryViewModel.clearBooks()
                     categoryViewModel.getBooksByCategory(cid)
-                    subScreen = SubScreen.None
-                    selectedTab = MainTab.Home
+                    subScreen = SubScreen.CategoryBooks(cid, cname)
                 }
             )
+            is SubScreen.CategoryBooks -> {
+                val cid = screen.categoryId
+                val cname = screen.categoryName
+                CategoryBooksScreen(
+                    categoryId = cid,
+                    categoryName = cname,
+                    categoryViewModel = categoryViewModel,
+                    isLoading = categoryIsLoading,
+                    onBackClick = { subScreen = SubScreen.Category },
+                    onBookClick = { bookId ->
+                        bookViewModel.getBookDetail(bookId)
+                        previousSubScreen = subScreen
+                        subScreen = SubScreen.BookDetail(bookId)
+                    }
+                )
+            }
             is SubScreen.Login -> LoginScreen(
                 onLoginClick = { u, p -> userViewModel.login(u, p) },
                 onRegisterClick = {},
@@ -199,16 +230,35 @@ fun MainScreen(
             )
             is SubScreen.Settings -> SettingsScreen(
                 cdnName = cdnName,
+                cdnIndex = cdnIndex,
+                cdnCount = ApiClientFactory.getCdnCount(),
                 isDarkTheme = isDarkTheme,
                 themeMode = themeMode,
                 isLoggedIn = user?.isLogin == true,
                 onBackClick = { subScreen = SubScreen.None },
-                onSwitchCdn = { ApiClientFactory.switchCdn(); cdnName = ApiClientFactory.getCurrentCdnName() },
+                onSelectCdn = { index ->
+                    ApiClientFactory.setCdnIndex(index)
+                    cdnName = ApiClientFactory.getCurrentCdnName()
+                    cdnIndex = index
+                    prefs.setCdnIndex(index)
+                },
                 onSetThemeMode = onSetThemeMode,
                 onLogoutClick = {
                     userViewModel.logout()
                     subScreen = SubScreen.None
                     selectedTab = MainTab.Home
+                },
+                onShowDisclaimer = onShowDisclaimer,
+                onLineTestClick = { previousSubScreen = SubScreen.Settings; subScreen = SubScreen.LineTest }
+            )
+            is SubScreen.LineTest -> LineTestScreen(
+                currentCdnIndex = cdnIndex,
+                onBackClick = { subScreen = SubScreen.Settings },
+                onSelectCdn = { index ->
+                    ApiClientFactory.setCdnIndex(index)
+                    cdnName = ApiClientFactory.getCurrentCdnName()
+                    cdnIndex = index
+                    prefs.setCdnIndex(index)
                 }
             )
             is SubScreen.History -> HistoryScreen(
@@ -222,12 +272,7 @@ fun MainScreen(
                 },
                 onHideHistoryItem = { bookViewModel.hideHistoryItem(it) }
             )
-            is SubScreen.None -> { /* 主屏内容在下面渲染 */ }
-        }
-    }
-
-    // 如果当前是主屏，渲染主屏内容
-    if (subScreen is SubScreen.None) {
+            is SubScreen.None -> {
     val colorScheme = MaterialTheme.colorScheme
 
     Scaffold(
@@ -270,12 +315,28 @@ fun MainScreen(
             }
         }
     ) { padding ->
+        // Tab 方向：根据切换方向决定动画
+        val tabOrder = listOf(MainTab.Home, MainTab.Search, MainTab.Favorites, MainTab.Profile)
+        val previousTabIndex = remember { mutableIntStateOf(0) }
+        LaunchedEffect(selectedTab) {
+            previousTabIndex.intValue = tabOrder.indexOf(selectedTab).coerceAtLeast(0)
+        }
         AnimatedContent(
             targetState = selectedTab,
-            modifier = Modifier.padding(padding),
+            modifier = Modifier
+                .padding(padding)
+                .background(colorScheme.background),
             transitionSpec = {
-                (fadeIn(animationSpec = tween(200)) + slideInHorizontally(animationSpec = tween(200)) { it / 4 })
-                    .togetherWith(fadeOut(animationSpec = tween(200)) + slideOutHorizontally(animationSpec = tween(200)) { -it / 4 })
+                val currentIdx = tabOrder.indexOf(targetState).coerceAtLeast(0)
+                val prevIdx = tabOrder.indexOf(initialState).coerceAtLeast(0)
+                val slideRight = currentIdx > prevIdx
+                if (slideRight) {
+                    (fadeIn(tween(200)) + slideInHorizontally(tween(200)) { it / 4 })
+                        .togetherWith(fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { -it / 4 })
+                } else {
+                    (fadeIn(tween(200)) + slideInHorizontally(tween(200)) { -it / 4 })
+                        .togetherWith(fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { it / 4 })
+                }
             },
             label = "tab_transition"
         ) { tab ->
@@ -382,5 +443,8 @@ fun MainScreen(
             }
         }
     }
-    } // end if(subScreen is SubScreen.None)
+    } // close SubScreen.None
+    } // close when(screen)
+    } // close AnimatedContent
+    } // close Box wrapper
 }
