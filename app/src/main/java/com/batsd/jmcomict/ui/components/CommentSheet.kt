@@ -27,7 +27,8 @@ fun CommentSheet(
     hasMore: Boolean = false,
     onLoadMore: () -> Unit = {},
     onPostComment: (String, Boolean) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isPosting: Boolean = false
 ) {
     var inputText by remember { mutableStateOf("") }
     var isSpoiler by remember { mutableStateOf(false) }
@@ -70,9 +71,17 @@ fun CommentSheet(
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 4.dp)) {
                 IconButton(onClick = {
                     if (inputText.isBlank()) { scope.launch { toast("请输入内容") }; return@IconButton }
+                    if (isPosting) return@IconButton
                     onPostComment(inputText, isSpoiler); inputText = ""; isSpoiler = false
-                }, enabled = inputText.isNotBlank(), modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Default.Send, "发送", Modifier.size(20.dp))
+                }, enabled = inputText.isNotBlank() && !isPosting, modifier = Modifier.size(40.dp)) {
+                    if (isPosting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(Icons.Default.Send, "发送", Modifier.size(20.dp))
+                    }
                 }
                 Text("剧透", style = MaterialTheme.typography.labelSmall,
                     color = if (isSpoiler) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,

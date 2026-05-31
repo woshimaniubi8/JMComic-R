@@ -27,7 +27,7 @@ import com.batsd.jmcomict.ui.components.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserProfileScreen(
-    userName: String?, userId: String?, level: String?, coin: Int = 0,
+    userName: String?, userId: String?, level: String?, levelNumber: String = "", coin: Int = 0,
     exp: String = "", expPercent: Double = 0.0, avatarUrl: String = "", isLoggedIn: Boolean = false,
     history: List<BookItem> = emptyList(),
     onCheckInClick: (((Boolean, String) -> Unit) -> Unit) = {},
@@ -182,7 +182,7 @@ fun UserProfileScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             StatCard(
-                                label = "等级",
+                                label = levelNumber.ifEmpty { "LV.?" },
                                 value = level ?: "-",
                                 icon = Icons.Default.Star,
                                 modifier = Modifier.weight(1f)

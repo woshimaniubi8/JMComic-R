@@ -24,13 +24,17 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     cdnName: String = "分流1",
+    imageCdnName: String = "图片分流1",
     cdnIndex: Int = 0,
+    imageCdnIndex: Int = 0,
     cdnCount: Int = 4,
+    imageCdnCount: Int = 4,
     isDarkTheme: Boolean = false,
     themeMode: Int = 0,
     isLoggedIn: Boolean = false,
     onBackClick: () -> Unit,
     onSelectCdn: (Int) -> Unit,
+    onSelectImageCdn: (Int) -> Unit = {},
     onSetThemeMode: (Int) -> Unit,
     onLogoutClick: () -> Unit,
     onLineTestClick: (() -> Unit)? = null,
@@ -38,6 +42,7 @@ fun SettingsScreen(
     onAboutClick: (() -> Unit)? = null
 ) {
     var showCdnDialog by remember { mutableStateOf(false) }
+    var showImageCdnDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     val colorScheme = MaterialTheme.colorScheme
@@ -86,12 +91,32 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.SwapHoriz, null, Modifier.size(20.dp), tint = colorScheme.primary)
+                            Icon(Icons.Default.Api, null, Modifier.size(20.dp), tint = colorScheme.primary)
                             Spacer(Modifier.width(12.dp))
-                            Text("分流切换", style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
+                            Text("API 分流", style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(cdnName, style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant.opacity60)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = colorScheme.onSurfaceVariant.opacity38)
+                        }
+                    }
+                }
+            }
+            item {
+                CommonCard(variant = CardVariant.Filled, onClick = { showImageCdnDialog = true }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Image, null, Modifier.size(20.dp), tint = colorScheme.primary)
+                            Spacer(Modifier.width(12.dp))
+                            Text("图片分流", style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(imageCdnName, style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant.opacity60)
                             Spacer(Modifier.width(4.dp))
                             Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = colorScheme.onSurfaceVariant.opacity38)
                         }
@@ -175,13 +200,7 @@ fun SettingsScreen(
                 }
             }
             item {
-                CommonCard(variant = CardVariant.Filled, onClick = {
-                    if (onAboutClick != null) {
-                        onAboutClick()
-                    } else {
-                        showAboutDialog = true
-                    }
-                }) {
+                CommonCard(variant = CardVariant.Filled, onClick = { showAboutDialog = true }) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -203,11 +222,12 @@ fun SettingsScreen(
         }
     }
 
+    // ===== API 分流选择对话框 =====
     if (showCdnDialog) {
         AlertDialog(
             onDismissRequest = { showCdnDialog = false },
             confirmButton = { TextButton(onClick = { showCdnDialog = false }) { Text("取消") } },
-            title = { Text("选择线路") },
+            title = { Text("选择 API 线路") },
             shape = MaterialTheme.shapes.medium,
             containerColor = colorScheme.surfaceContainerHigh,
             text = {
@@ -221,6 +241,33 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(selected = cdnIndex == index, onClick = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(label, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    if (showImageCdnDialog) {
+        AlertDialog(
+            onDismissRequest = { showImageCdnDialog = false },
+            confirmButton = { TextButton(onClick = { showImageCdnDialog = false }) { Text("取消") } },
+            title = { Text("选择图片 CDN 线路") },
+            shape = MaterialTheme.shapes.medium,
+            containerColor = colorScheme.surfaceContainerHigh,
+            text = {
+                Column {
+                    (0 until imageCdnCount).forEach { index ->
+                        val label = "图片分流${index + 1}"
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable { onSelectImageCdn(index); showImageCdnDialog = false }
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = imageCdnIndex == index, onClick = null)
                             Spacer(Modifier.width(12.dp))
                             Text(label, style = MaterialTheme.typography.bodyLarge)
                         }
@@ -253,6 +300,7 @@ fun SettingsScreen(
     }
 
     if (showAboutDialog) {
+        val githubUrl = "https://github.com/woshimaniubi8/JMComic-R"
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
             confirmButton = { TextButton(onClick = { showAboutDialog = false }) { Text(stringResource(R.string.confirm)) } },
@@ -265,6 +313,33 @@ fun SettingsScreen(
                         "v${versionName.ifEmpty { "?" }}",
                         style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Code, null,
+                            Modifier.size(18.dp),
+                            tint = colorScheme.primary
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "GitHub",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colorScheme.primary,
+                            modifier = Modifier.clickable {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(githubUrl)
+                                )
+                                context.startActivity(intent)
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        githubUrl,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant.opacity60
                     )
                 }
             },

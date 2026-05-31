@@ -60,13 +60,24 @@ object ApiClientFactory {
         "https://cdn-msp.jmdanjonproxy.xyz"  // 分流4
     )
     @Volatile
-    private var currentCdnIndex = 2  // 默认分流3
+    private var currentCdnIndex = 2  // 默认分流3（图片CDN索引）
+    @Volatile
+    private var currentApiUrlIndex = 2  // API基址索引（可独立选择）
 
-    /** 从持久化恢复 CDN */
+    /** 从持久化恢复 API 和图片 CDN */
     @JvmStatic
     fun restoreCdnIndex(index: Int) {
         currentCdnIndex = index.coerceIn(0, CDN_LIST.lastIndex)
-        currentBaseUrl = API_URL_LIST[currentCdnIndex]
+        currentBaseUrl = API_URL_LIST[index.coerceIn(0, API_URL_LIST.lastIndex)]
+        currentApiUrlIndex = index.coerceIn(0, API_URL_LIST.lastIndex)
+    }
+
+    /** 分别恢复 API 和图片 CDN */
+    @JvmStatic
+    fun restoreIndices(apiIndex: Int, imageIndex: Int) {
+        currentApiUrlIndex = apiIndex.coerceIn(0, API_URL_LIST.lastIndex)
+        currentBaseUrl = API_URL_LIST[currentApiUrlIndex]
+        currentCdnIndex = imageIndex.coerceIn(0, CDN_LIST.lastIndex)
     }
     /** 图片 CDN 主机名，用于 Referer 拦截器匹配 */
     private const val IMAGE_CDN_HOST = "cdn-msp.jmapiproxy3.cc"
@@ -339,20 +350,41 @@ object ApiClientFactory {
     /** 获取图片 CDN 基础 URL (用于拼接章节图片链接) */
     fun getImageBaseUrl(): String = CDN_LIST[currentCdnIndex.coerceIn(0, CDN_LIST.lastIndex)]
 
-    /** 设置 CDN 分流索引（同步切换 API 基址和图片 CDN） */
+    /** 设置 CDN 分流索引（同步切换 API 基址和图片 CDN，兼容旧版） */
     fun setCdnIndex(index: Int) {
-        currentCdnIndex = index.coerceIn(0, CDN_LIST.lastIndex)
-        currentBaseUrl = API_URL_LIST[currentCdnIndex]
+        setApiUrlIndex(index)
+        setImageCdnIndex(index)
     }
 
-    /** 获取当前 CDN 索引 */
+    /** 单独设置 API 基址索引 */
+    fun setApiUrlIndex(index: Int) {
+        currentApiUrlIndex = index.coerceIn(0, API_URL_LIST.lastIndex)
+        currentBaseUrl = API_URL_LIST[currentApiUrlIndex]
+    }
+
+    /** 单独设置图片 CDN 索引（不切换 API） */
+    fun setImageCdnIndex(index: Int) {
+        currentCdnIndex = index.coerceIn(0, CDN_LIST.lastIndex)
+        // 注意：setCdnIndex 不再自动同步 API 基址
+    }
+
+    /** 获取当前 CDN 索引（图片CDN） */
     fun getCurrentCdnIndex(): Int = currentCdnIndex
+
+    /** 获取当前 API 基址索引 */
+    fun getCurrentApiUrlIndex(): Int = currentApiUrlIndex
 
     /** 获取 CDN 分流总数 */
     fun getCdnCount(): Int = CDN_LIST.size
 
+    /** 获取 API 基址总数 */
+    fun getApiUrlCount(): Int = API_URL_LIST.size
+
     /** 获取当前 CDN 名称 */
-    fun getCurrentCdnName(): String = "分流${currentCdnIndex + 1}"
+    fun getCurrentCdnName(): String = "分流${currentApiUrlIndex + 1}"
+
+    /** 获取当前图片 CDN 名称 */
+    fun getCurrentImageCdnName(): String = "图片分流${currentCdnIndex + 1}"
 
     /** 获取 API 基址列表（供线路测试使用） */
     fun getApiUrlList(): List<String> = API_URL_LIST

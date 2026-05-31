@@ -74,11 +74,14 @@ fun MainScreen(
     var previousSubScreen by remember { mutableStateOf<SubScreen>(SubScreen.None) }
     var searchHistory by remember { mutableStateOf(emptyList<String>()) }
     var selectedSection by remember { mutableIntStateOf(0) }
-    // 同步恢复 CDN 分流索引
-    val initialCdnIndex = prefs.getCdnIndex().coerceIn(0, ApiClientFactory.getCdnCount() - 1)
-    ApiClientFactory.restoreCdnIndex(initialCdnIndex)
+    // 同步恢复 CDN 分流索引（API 和图片 CDN 独立恢复）
+    val initialApiIndex = prefs.getApiUrlIndex().coerceIn(0, ApiClientFactory.getApiUrlCount() - 1)
+    val initialImageIndex = prefs.getImageCdnIndex().coerceIn(0, ApiClientFactory.getCdnCount() - 1)
+    ApiClientFactory.restoreIndices(initialApiIndex, initialImageIndex)
     var cdnName by remember { mutableStateOf(ApiClientFactory.getCurrentCdnName()) }
+    var imageCdnName by remember { mutableStateOf(ApiClientFactory.getCurrentImageCdnName()) }
     var cdnIndex by remember { mutableIntStateOf(ApiClientFactory.getCurrentCdnIndex()) }
+    var apiUrlIndex by remember { mutableIntStateOf(ApiClientFactory.getCurrentApiUrlIndex()) }
     val userIsLoading by userViewModel.isLoading.collectAsState()
     val userError by userViewModel.error.collectAsState()
 
@@ -92,6 +95,8 @@ fun MainScreen(
                 previousSubScreen = SubScreen.None
                 subScreen = prev
             }
+            is SubScreen.LineTest -> subScreen = SubScreen.Settings
+            is SubScreen.Settings -> subScreen = SubScreen.None
             else -> subScreen = SubScreen.None
         }
     }
@@ -230,17 +235,26 @@ fun MainScreen(
             )
             is SubScreen.Settings -> SettingsScreen(
                 cdnName = cdnName,
-                cdnIndex = cdnIndex,
-                cdnCount = ApiClientFactory.getCdnCount(),
+                imageCdnName = imageCdnName,
+                cdnIndex = apiUrlIndex,
+                imageCdnIndex = cdnIndex,
+                cdnCount = ApiClientFactory.getApiUrlCount(),
+                imageCdnCount = ApiClientFactory.getCdnCount(),
                 isDarkTheme = isDarkTheme,
                 themeMode = themeMode,
                 isLoggedIn = user?.isLogin == true,
                 onBackClick = { subScreen = SubScreen.None },
                 onSelectCdn = { index ->
-                    ApiClientFactory.setCdnIndex(index)
+                    ApiClientFactory.setApiUrlIndex(index)
                     cdnName = ApiClientFactory.getCurrentCdnName()
+                    apiUrlIndex = index
+                    prefs.setApiUrlIndex(index)
+                },
+                onSelectImageCdn = { index ->
+                    ApiClientFactory.setImageCdnIndex(index)
+                    imageCdnName = ApiClientFactory.getCurrentImageCdnName()
                     cdnIndex = index
-                    prefs.setCdnIndex(index)
+                    prefs.setImageCdnIndex(index)
                 },
                 onSetThemeMode = onSetThemeMode,
                 onLogoutClick = {
@@ -252,13 +266,20 @@ fun MainScreen(
                 onLineTestClick = { previousSubScreen = SubScreen.Settings; subScreen = SubScreen.LineTest }
             )
             is SubScreen.LineTest -> LineTestScreen(
-                currentCdnIndex = cdnIndex,
+                currentApiUrlIndex = apiUrlIndex,
+                currentImageCdnIndex = cdnIndex,
                 onBackClick = { subScreen = SubScreen.Settings },
-                onSelectCdn = { index ->
-                    ApiClientFactory.setCdnIndex(index)
+                onSelectApiCdn = { index ->
+                    ApiClientFactory.setApiUrlIndex(index)
                     cdnName = ApiClientFactory.getCurrentCdnName()
+                    apiUrlIndex = index
+                    prefs.setApiUrlIndex(index)
+                },
+                onSelectImageCdn = { index ->
+                    ApiClientFactory.setImageCdnIndex(index)
+                    imageCdnName = ApiClientFactory.getCurrentImageCdnName()
                     cdnIndex = index
-                    prefs.setCdnIndex(index)
+                    prefs.setImageCdnIndex(index)
                 }
             )
             is SubScreen.History -> HistoryScreen(
@@ -421,6 +442,7 @@ fun MainScreen(
                     UserProfileScreen(
                     userName = user?.userName, userId = user?.uid,
                     level = user?.levelName?.takeIf { it.isNotEmpty() } ?: user?.title ?: "",
+                    levelNumber = user?.level?.let { "LV.${it}" } ?: "",
                     coin = user?.coin ?: 0,
                     exp = user?.expStr ?: "",
                     expPercent = user?.expPercent ?: 0.0,

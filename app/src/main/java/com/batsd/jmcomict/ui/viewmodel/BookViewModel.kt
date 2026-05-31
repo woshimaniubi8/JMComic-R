@@ -215,8 +215,21 @@ class BookViewModel(
     fun toggleFavorite(bookId: String, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             bookRepository.toggleFavorite(bookId)
-                .onSuccess { onResult(true, "操作成功") }
+                .onSuccess { msg -> onResult(true, msg) }
                 .onFailure { onResult(false, it.message ?: "操作失败") }
+        }
+    }
+
+    /** 收藏（返回服务器消息） */
+    private val _favResult = MutableStateFlow<Pair<Boolean, String>?>(null)
+    val favResult: StateFlow<Pair<Boolean, String>?> = _favResult
+
+    fun toggleFavoriteWithResult(bookId: String) {
+        viewModelScope.launch {
+            _favResult.value = null
+            bookRepository.toggleFavorite(bookId)
+                .onSuccess { _favResult.value = true to "操作成功" }
+                .onFailure { _favResult.value = false to (it.message ?: "操作失败") }
         }
     }
 

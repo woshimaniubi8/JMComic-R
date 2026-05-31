@@ -70,8 +70,32 @@ class BookRepository {
         }
     }
 
-    suspend fun toggleFavorite(bookId: String): Result<Unit> {
-        return apiCallSimple { apiService.toggleFavorite(bookId) }
+    suspend fun toggleFavorite(bookId: String): Result<String> {
+        return try {
+            val response = apiService.toggleFavorite(bookId)
+            if (response.isSuccess()) {
+                // 尝试从解密后的 data 中提取消息
+                val decrypted = response.decryptDataField()
+                if (!decrypted.isNullOrEmpty()) {
+                    try {
+                        val obj = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                            .decodeFromString<kotlinx.serialization.json.JsonObject>(decrypted)
+                        val msg = obj["msg"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                            ?: obj["message"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                        if (!msg.isNullOrEmpty()) return Result.success(msg)
+                    } catch (_: Exception) {}
+                }
+                // 回退：使用 ApiResponse 的 message 字段
+                val msg = response.message.ifEmpty {
+                    response.errorMsg.ifEmpty { "操作成功" }
+                }
+                Result.success(msg)
+            } else {
+                Result.failure(Exception(response.errorMessage()))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun toggleLike(bookId: String): Result<String> {

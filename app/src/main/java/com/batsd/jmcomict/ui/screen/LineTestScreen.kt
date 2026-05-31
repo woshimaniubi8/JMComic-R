@@ -45,9 +45,11 @@ data class LineTestResult(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LineTestScreen(
-    currentCdnIndex: Int = 0,
+    currentApiUrlIndex: Int = 0,
+    currentImageCdnIndex: Int = 0,
     onBackClick: () -> Unit,
-    onSelectCdn: (Int) -> Unit = {}
+    onSelectApiCdn: (Int) -> Unit = {},
+    onSelectImageCdn: (Int) -> Unit = {}
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
@@ -59,7 +61,22 @@ fun LineTestScreen(
     var testingPhase by remember { mutableStateOf("") }  // "api", "image", ""
     var testingIndex by remember { mutableIntStateOf(-1) }
     var totalCount by remember { mutableIntStateOf(0) }
-    var showSelectDialog by remember { mutableStateOf(false) }
+    var showApiSelectDialog by remember { mutableStateOf(false) }
+    var showImageSelectDialog by remember { mutableStateOf(false) }
+    var showRecommendedDialog by remember { mutableStateOf(false) }
+
+    // 推荐分流计算
+    fun findBestResult(results: List<LineTestResult>): Int {
+        var bestIdx = -1
+        var bestLatency = Long.MAX_VALUE
+        results.forEachIndexed { index, result ->
+            if (result.isSuccess && result.latency >= 0 && result.latency < bestLatency) {
+                bestLatency = result.latency
+                bestIdx = index
+            }
+        }
+        return bestIdx
+    }
 
     // 初始化时立即填充占位列表，让项目始终可见
     LaunchedEffect(Unit) {
@@ -76,7 +93,6 @@ fun LineTestScreen(
             LineTestResult(name, url, -1, false, TestLineType.IMAGE, "等待测试")
         }
         isTesting = true
-        isTesting = true
         runAllTests(
             scope = scope,
             onProgress = { phase, index, total, partialApi, partialImage ->
@@ -92,6 +108,12 @@ fun LineTestScreen(
                 isTesting = false
                 testingPhase = ""
                 testingIndex = -1
+                // 测试完成后显示推荐对话框
+                val bestApiIdx = findBestResult(api)
+                val bestImageIdx = findBestResult(image)
+                if (bestApiIdx >= 0 || bestImageIdx >= 0) {
+                    showRecommendedDialog = true
+                }
             }
         )
     }
@@ -172,7 +194,7 @@ fun LineTestScreen(
                         "（${testingIndex + 1}/${totalCount}）"
                     } else ""
                     InfoHeader(
-                        title = "API 线路（当前：${ApiClientFactory.getCurrentCdnName()}）$apiProgress",
+                        title = "API 线路（当前：分流${currentApiUrlIndex + 1}）$apiProgress",
                         icon = Icons.Default.Api
                     )
                 }
@@ -182,13 +204,13 @@ fun LineTestScreen(
             itemsIndexed(apiResults) { index, result ->
                 LineTestCard(
                     result = result,
-                    isCurrent = index == currentCdnIndex,
+                    isCurrent = index == currentApiUrlIndex,
                     latencyColor = latencyColor(result.latency),
                     latencyText = latencyText(result),
                     isTestingNow = isTesting && testingPhase == "api" && index == testingIndex,
                     onClick = {
                         if (result.isSuccess && result.latency >= 0) {
-                            showSelectDialog = true
+                            showApiSelectDialog = true
                         }
                     }
                 )
@@ -215,11 +237,15 @@ fun LineTestScreen(
             itemsIndexed(imageResults) { index, result ->
                 LineTestCard(
                     result = result,
-                    isCurrent = index == currentCdnIndex,
+                    isCurrent = index == currentImageCdnIndex,
                     latencyColor = latencyColor(result.latency),
                     latencyText = latencyText(result),
                     isTestingNow = isTesting && testingPhase == "image" && index == testingIndex,
-                    onClick = {} // 图片 CDN 不支持直接切换
+                    onClick = {
+                        if (result.isSuccess && result.latency >= 0) {
+                            showImageSelectDialog = true
+                        }
+                    }
                 )
             }
 
@@ -269,6 +295,11 @@ fun LineTestScreen(
                                     isTesting = false
                                     testingPhase = ""
                                     testingIndex = -1
+                                    val bestApiIdx = findBestResult(api)
+                                    val bestImageIdx = findBestResult(image)
+                                    if (bestApiIdx >= 0 || bestImageIdx >= 0) {
+                                        showRecommendedDialog = true
+                                    }
                                 }
                             )
                         }
@@ -296,15 +327,15 @@ fun LineTestScreen(
     }
 
     // 选择 API 线路对话框
-    if (showSelectDialog) {
+    if (showApiSelectDialog) {
         AlertDialog(
-            onDismissRequest = { showSelectDialog = false },
+            onDismissRequest = { showApiSelectDialog = false },
             confirmButton = {
-                TextButton(onClick = { showSelectDialog = false }) {
+                TextButton(onClick = { showApiSelectDialog = false }) {
                     Text("取消")
                 }
             },
-            title = { Text("选择要切换的线路") },
+            title = { Text("选择 API 线路") },
             shape = MaterialTheme.shapes.medium,
             containerColor = colorScheme.surfaceContainerHigh,
             text = {
@@ -318,7 +349,7 @@ fun LineTestScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = index == currentCdnIndex,
+                                selected = index == currentApiUrlIndex,
                                 onClick = null,
                                 enabled = isSuccess
                             )
@@ -347,8 +378,8 @@ fun LineTestScreen(
                             if (isSuccess) {
                                 TextButton(
                                     onClick = {
-                                        onSelectCdn(index)
-                                        showSelectDialog = false
+                                        onSelectApiCdn(index)
+                                        showApiSelectDialog = false
                                     }
                                 ) {
                                     Text("切换")
@@ -360,6 +391,147 @@ fun LineTestScreen(
                                 color = colorScheme.outlineVariant.opacity50,
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             )
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    // 选择图片 CDN 线路对话框
+    if (showImageSelectDialog) {
+        AlertDialog(
+            onDismissRequest = { showImageSelectDialog = false },
+            confirmButton = {
+                TextButton(onClick = { showImageSelectDialog = false }) {
+                    Text("取消")
+                }
+            },
+            title = { Text("选择图片 CDN 线路") },
+            shape = MaterialTheme.shapes.medium,
+            containerColor = colorScheme.surfaceContainerHigh,
+            text = {
+                Column {
+                    imageResults.forEachIndexed { index, result ->
+                        val isSuccess = result.isSuccess && result.latency >= 0
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = index == currentImageCdnIndex,
+                                onClick = null,
+                                enabled = isSuccess
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    result.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (isSuccess) colorScheme.onSurface
+                                    else colorScheme.onSurfaceVariant
+                                )
+                                if (isSuccess) {
+                                    Text(
+                                        "${result.latency} ms",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    Text(
+                                        result.errorMsg.ifEmpty { "不可用" },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.error
+                                    )
+                                }
+                            }
+                            if (isSuccess) {
+                                TextButton(
+                                    onClick = {
+                                        onSelectImageCdn(index)
+                                        showImageSelectDialog = false
+                                    }
+                                ) {
+                                    Text("切换")
+                                }
+                            }
+                        }
+                        if (index < imageResults.lastIndex) {
+                            HorizontalDivider(
+                                color = colorScheme.outlineVariant.opacity50,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    // 推荐分流对话框
+    if (showRecommendedDialog) {
+        val bestApiIdx = findBestResult(apiResults)
+        val bestImageIdx = findBestResult(imageResults)
+        AlertDialog(
+            onDismissRequest = { showRecommendedDialog = false },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { showRecommendedDialog = false }) {
+                        Text("确定")
+                    }
+                    if (bestApiIdx >= 0 || bestImageIdx >= 0) {
+                        Button(
+                            onClick = {
+                                if (bestApiIdx >= 0) onSelectApiCdn(bestApiIdx)
+                                if (bestImageIdx >= 0) onSelectImageCdn(bestImageIdx)
+                                showRecommendedDialog = false
+                            }
+                        ) {
+                            Text("一键设置")
+                        }
+                    }
+                }
+            },
+            title = { Text("测试结果") },
+            shape = MaterialTheme.shapes.medium,
+            containerColor = colorScheme.surfaceContainerHigh,
+            text = {
+                Column {
+                    if (bestApiIdx >= 0) {
+                        val best = apiResults[bestApiIdx]
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Api, null, Modifier.size(18.dp), tint = colorScheme.primary)
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("推荐 API 线路: ${best.name}", style = MaterialTheme.typography.bodyMedium)
+                                Text("延迟: ${best.latency} ms", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Api, null, Modifier.size(18.dp), tint = colorScheme.error)
+                            Spacer(Modifier.width(8.dp))
+                            Text("所有 API 线路均不可用", style = MaterialTheme.typography.bodyMedium, color = colorScheme.error)
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    if (bestImageIdx >= 0) {
+                        val best = imageResults[bestImageIdx]
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Image, null, Modifier.size(18.dp), tint = colorScheme.primary)
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("推荐图片 CDN: ${best.name}", style = MaterialTheme.typography.bodyMedium)
+                                Text("延迟: ${best.latency} ms", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Image, null, Modifier.size(18.dp), tint = colorScheme.error)
+                            Spacer(Modifier.width(8.dp))
+                            Text("所有图片 CDN 均不可用", style = MaterialTheme.typography.bodyMedium, color = colorScheme.error)
                         }
                     }
                 }
@@ -538,8 +710,8 @@ private fun runAllTests(
 ) {
     scope.launch(Dispatchers.IO) {
         val client = OkHttpClient.Builder()
-            .connectTimeout(8, TimeUnit.SECONDS)
-            .readTimeout(5, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
             .followRedirects(true)
             .build()
 

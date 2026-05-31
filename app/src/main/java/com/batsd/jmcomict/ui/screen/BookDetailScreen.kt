@@ -64,12 +64,29 @@ fun BookDetailScreen(
     var resultMessage by remember { mutableStateOf("") }
     var showComments by remember { mutableStateOf(false) }
     var commentsLoading by remember { mutableStateOf(false) }
+    var isPosting by remember { mutableStateOf(false) }
+    var isFavLoading by remember { mutableStateOf(false) }
+    var isLikeLoading by remember { mutableStateOf(false) }
     var commentPage by remember { mutableIntStateOf(1) }
     val sheetState = rememberModalBottomSheetState()
 
     // 评论加载完成后重置加载状态
     LaunchedEffect(comments) {
-        if (comments.isNotEmpty()) commentsLoading = false
+        if (!showComments) return@LaunchedEffect
+        commentsLoading = false
+    }
+
+    // 评论加载失败也重置（通过 isLoading 变化检测）
+    LaunchedEffect(isLoading) {
+        if (!isLoading && showComments && comments.isNotEmpty()) {
+            commentsLoading = false
+        }
+    }
+    // 当评论列表为空但加载完成时也重置
+    LaunchedEffect(commentsLoading, isLoading) {
+        if (!isLoading && !commentsLoading && comments.isEmpty() && showComments) {
+            // 已加载完成，图片显示暂无评论
+        }
     }
 
     // 评论发送结果 → Dialog（消费后清空，避免重复弹窗）
@@ -77,6 +94,7 @@ fun BookDetailScreen(
         commentResult?.let { (ok, msg) ->
             resultMessage = msg.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
             showResultDialog = true
+            isPosting = false
         }
     }
 
@@ -291,13 +309,30 @@ fun BookDetailScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 IconButton(onClick = {
                                     if (!isLoggedIn) { scope.launch { toast("请先登录") }; return@IconButton }
+                                    if (isFavLoading) return@IconButton
+                                    isFavLoading = true
                                     onAddFavoriteClick { ok, msg ->
                                         if (ok) localFav = !localFav
                                         resultMessage = msg; showResultDialog = true
+                                        isFavLoading = false
                                     }
                                 }, modifier = Modifier.size(48.dp)) {
-                                    Icon(if (localFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, Modifier.size(22.dp),
-                                        tint = if (localFav) colorScheme.error else colorScheme.onSurfaceVariant)
+                                    AnimatedContent(
+                                        targetState = isFavLoading,
+                                        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                                        label = "fav_loading"
+                                    ) { loading ->
+                                        if (loading) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(20.dp),
+                                                strokeWidth = 2.dp,
+                                                color = colorScheme.primary
+                                            )
+                                        } else {
+                                            Icon(if (localFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, Modifier.size(22.dp),
+                                                tint = if (localFav) colorScheme.error else colorScheme.onSurfaceVariant)
+                                        }
+                                    }
                                 }
                                 Text(if (localFav) "已收藏" else "收藏", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
                             }
@@ -305,21 +340,40 @@ fun BookDetailScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 IconButton(onClick = {
                                     if (!isLoggedIn) { scope.launch { toast("请先登录") }; return@IconButton }
+                                    if (isLikeLoading) return@IconButton
+                                    isLikeLoading = true
                                     onToggleLike { ok, msg ->
                                         if (ok) localLiked = !localLiked
                                         resultMessage = msg; showResultDialog = true
+                                        isLikeLoading = false
                                     }
                                 }, modifier = Modifier.size(48.dp)) {
-                                    Icon(Icons.Default.ThumbUp, null, Modifier.size(22.dp),
-                                        tint = if (localLiked) colorScheme.primary else colorScheme.onSurfaceVariant)
+                                    AnimatedContent(
+                                        targetState = isLikeLoading,
+                                        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                                        label = "like_loading"
+                                    ) { loading ->
+                                        if (loading) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(20.dp),
+                                                strokeWidth = 2.dp,
+                                                color = colorScheme.primary
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.ThumbUp, null, Modifier.size(22.dp),
+                                                tint = if (localLiked) colorScheme.primary else colorScheme.onSurfaceVariant)
+                                        }
+                                    }
                                 }
                                 Text("点赞", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
                             }
                             // 评论
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 IconButton(onClick = {
+                                    if (commentsLoading) return@IconButton
                                     commentsLoading = true
                                     showComments = true
+                                    commentPage = 1
                                     onLoadComments()
                                 }, modifier = Modifier.size(48.dp)) {
                                     AnimatedContent(
@@ -371,9 +425,10 @@ fun BookDetailScreen(
         ) {
             CommentSheet(
                 comments = comments,
-                isLoading = isLoading,
+                isLoading = commentsLoading && comments.isEmpty(),
                 totalCount = commentCount,
                 hasMore = comments.size < commentCount && comments.isNotEmpty(),
+                isPosting = isPosting,
                 onLoadMore = {
                     val next = commentPage + 1
                     commentPage = next
@@ -384,11 +439,11 @@ fun BookDetailScreen(
                         scope.launch { toast("请先登录") }
                         return@CommentSheet
                     }
-                    if (currentBookId.isEmpty()) return@CommentSheet
+                    if (bookDetail?.id?.isEmpty() != false) return@CommentSheet
+                    isPosting = true
                     postCommentAction(text, spoiler)
-                    // 不立即弹 toast，让 onPostComment 内部处理结果反馈
                 },
-                onDismiss = { showComments = false; commentPage = 1 }
+                onDismiss = { showComments = false; commentPage = 1; isPosting = false }
             )
         }
     }

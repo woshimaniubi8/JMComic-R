@@ -121,6 +121,12 @@ class PreferencesManager(context: Context) {
     fun getCdnIndex(): Int = sharedPreferences.getInt("cdn_index", 2)  // 默认分流3
     fun setCdnIndex(index: Int) { sharedPreferences.edit().putInt("cdn_index", index).apply() }
 
+    // 独立的 API 和图片 CDN 索引
+    fun getApiUrlIndex(): Int = sharedPreferences.getInt("api_url_index", getCdnIndex())
+    fun setApiUrlIndex(index: Int) { sharedPreferences.edit().putInt("api_url_index", index).apply() }
+    fun getImageCdnIndex(): Int = sharedPreferences.getInt("image_cdn_index", getCdnIndex())
+    fun setImageCdnIndex(index: Int) { sharedPreferences.edit().putInt("image_cdn_index", index).apply() }
+
     // 主题切换
     fun isDarkTheme(): Boolean = sharedPreferences.getBoolean("dark_theme", false)
     fun setDarkTheme(isDark: Boolean) { sharedPreferences.edit().putBoolean("dark_theme", isDark).apply() }
