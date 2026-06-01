@@ -44,7 +44,6 @@ fun SettingsScreen(
     var showCdnDialog by remember { mutableStateOf(false) }
     var showImageCdnDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
-    var showAboutDialog by remember { mutableStateOf(false) }
     val colorScheme = MaterialTheme.colorScheme
     val modeNames = listOf("跟随系统", "浅色", "深色")
     val toast = LocalToast.current
@@ -200,7 +199,9 @@ fun SettingsScreen(
                 }
             }
             item {
-                CommonCard(variant = CardVariant.Filled, onClick = { showAboutDialog = true }) {
+                CommonCard(variant = CardVariant.Filled, onClick = {
+                    onAboutClick?.invoke() ?: scope.launch { toast(aboutLabel) }
+                }) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -296,55 +297,6 @@ fun SettingsScreen(
                     }
                 }
             }
-        )
-    }
-
-    if (showAboutDialog) {
-        val githubUrl = "https://github.com/woshimaniubi8/JMComic-R"
-        AlertDialog(
-            onDismissRequest = { showAboutDialog = false },
-            confirmButton = { TextButton(onClick = { showAboutDialog = false }) { Text(stringResource(R.string.confirm)) } },
-            title = { Text(stringResource(R.string.about_title)) },
-            text = {
-                Column {
-                    Text(stringResource(R.string.about_content))
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "v${versionName.ifEmpty { "?" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Code, null,
-                            Modifier.size(18.dp),
-                            tint = colorScheme.primary
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "GitHub",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colorScheme.primary,
-                            modifier = Modifier.clickable {
-                                val intent = android.content.Intent(
-                                    android.content.Intent.ACTION_VIEW,
-                                    android.net.Uri.parse(githubUrl)
-                                )
-                                context.startActivity(intent)
-                            }
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        githubUrl,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant.opacity60
-                    )
-                }
-            },
-            shape = MaterialTheme.shapes.medium,
-            containerColor = colorScheme.surfaceContainerHigh,
         )
     }
 }

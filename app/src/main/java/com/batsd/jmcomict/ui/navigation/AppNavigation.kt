@@ -35,6 +35,7 @@ sealed class SubScreen {
     object Settings : SubScreen()
     object History : SubScreen()
     object LineTest : SubScreen()
+    object About : SubScreen()
 }
 
 val navItems = listOf(
@@ -82,6 +83,15 @@ fun MainScreen(
     var imageCdnName by remember { mutableStateOf(ApiClientFactory.getCurrentImageCdnName()) }
     var cdnIndex by remember { mutableIntStateOf(ApiClientFactory.getCurrentCdnIndex()) }
     var apiUrlIndex by remember { mutableIntStateOf(ApiClientFactory.getCurrentApiUrlIndex()) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val versionName = remember {
+        try {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+        } catch (e: Exception) {
+            ""
+        }
+    }
     val userIsLoading by userViewModel.isLoading.collectAsState()
     val userError by userViewModel.error.collectAsState()
 
@@ -97,6 +107,7 @@ fun MainScreen(
             }
             is SubScreen.LineTest -> subScreen = SubScreen.Settings
             is SubScreen.Settings -> subScreen = SubScreen.None
+            is SubScreen.About -> subScreen = SubScreen.Settings
             else -> subScreen = SubScreen.None
         }
     }
@@ -144,6 +155,7 @@ fun MainScreen(
                 (initialState is SubScreen.CategoryBooks && targetState is SubScreen.Category) ||
                 (initialState is SubScreen.BookDetail && targetState !is SubScreen.Reader) ||
                 (initialState is SubScreen.LineTest && targetState is SubScreen.Settings) ||
+                (initialState is SubScreen.About && targetState is SubScreen.Settings) ||
                 (initialState is SubScreen.Reader)
             if (isGoingBack) {
                 // 返回：向右滑出
@@ -263,7 +275,8 @@ fun MainScreen(
                     selectedTab = MainTab.Home
                 },
                 onShowDisclaimer = onShowDisclaimer,
-                onLineTestClick = { previousSubScreen = SubScreen.Settings; subScreen = SubScreen.LineTest }
+                onLineTestClick = { previousSubScreen = SubScreen.Settings; subScreen = SubScreen.LineTest },
+                onAboutClick = { previousSubScreen = SubScreen.Settings; subScreen = SubScreen.About }
             )
             is SubScreen.LineTest -> LineTestScreen(
                 currentApiUrlIndex = apiUrlIndex,
@@ -281,6 +294,10 @@ fun MainScreen(
                     cdnIndex = index
                     prefs.setImageCdnIndex(index)
                 }
+            )
+            is SubScreen.About -> AboutScreen(
+                versionName = versionName,
+                onBackClick = { subScreen = SubScreen.Settings }
             )
             is SubScreen.History -> HistoryScreen(
                 history = history,

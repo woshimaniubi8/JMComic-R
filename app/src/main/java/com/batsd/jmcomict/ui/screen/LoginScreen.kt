@@ -1,6 +1,7 @@
 ﻿package com.batsd.jmcomict.ui.screen
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -17,6 +18,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
+import com.batsd.jmcomict.R
 import com.batsd.jmcomict.ui.components.*
 
 /**
@@ -53,11 +56,10 @@ fun LoginScreen(
                 color = colorScheme.primaryContainer
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.MenuBook,
-                        null,
-                        modifier = Modifier.size(40.dp),
-                        tint = colorScheme.onPrimaryContainer
+                    Image(
+                        painter = painterResource(com.batsd.jmcomict.R.mipmap.ic_launcher_foreground),
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp)
                     )
                 }
             }
