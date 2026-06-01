@@ -42,11 +42,12 @@ fun ReaderScreen(
     onBackClick: () -> Unit,
     onPreviousPage: () -> Unit,
     onNextPage: () -> Unit,
-    onPageSelect: (Int) -> Unit
+    onPageSelect: (Int) -> Unit,
+    localImagePaths: List<String> = emptyList()
 ) {
     var showBar by remember { mutableStateOf(true) }
     val totalPages = episode?.pages ?: 0
-    val imageUrls = episode?.pictureUrl ?: emptyList()
+    val imageUrls = if (localImagePaths.isNotEmpty()) localImagePaths else (episode?.pictureUrl ?: emptyList())
     val listState = rememberLazyListState()
     val colorScheme = MaterialTheme.colorScheme
 

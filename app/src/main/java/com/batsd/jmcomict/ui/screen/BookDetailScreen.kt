@@ -50,7 +50,12 @@ fun BookDetailScreen(
     onLoadComments: () -> Unit = {},
     onLoadMoreComments: (Int) -> Unit = {},
     onPostComment: (String, Boolean) -> Unit = { _, _ -> },
-    commentResult: Pair<Boolean, String>? = null
+    commentResult: Pair<Boolean, String>? = null,
+    isDownloaded: Boolean = false,
+    hasUpdate: Boolean = false,
+    onDownloadClick: () -> Unit = {},
+    isDownloading: Boolean = false,
+    downloadProgress: Pair<Int, Int> = 0 to 0
 ) {
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
@@ -394,6 +399,73 @@ fun BookDetailScreen(
                                     }
                                 }
                                 Text("评论", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
+                            }
+                            // 下载
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                IconButton(onClick = {
+                                    if (isDownloading) return@IconButton
+                                    onDownloadClick()
+                                }, modifier = Modifier.size(48.dp)) {
+                                    Box {
+                                        AnimatedContent(
+                                            targetState = if (isDownloading) 1 else if (isDownloaded) 2 else 0,
+                                            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                                            label = "download_loading"
+                                        ) { state ->
+                                            when (state) {
+                                                1 -> CircularProgressIndicator(
+                                                    modifier = Modifier.size(20.dp),
+                                                    strokeWidth = 2.dp,
+                                                    color = colorScheme.primary
+                                                )
+                                                2 -> Icon(Icons.Default.CloudDone, null, Modifier.size(22.dp),
+                                                    tint = colorScheme.primary)
+                                                else -> Icon(Icons.Default.CloudDownload, null, Modifier.size(22.dp),
+                                                    tint = colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                        // 更新徽章
+                                        if (isDownloaded && hasUpdate) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .size(10.dp)
+                                                    .background(colorScheme.error, shape = androidx.compose.foundation.shape.CircleShape)
+                                            )
+                                        }
+                                    }
+                                }
+                                Text(
+                                    if (isDownloading) "下载中" else if (isDownloaded) if (hasUpdate) "有更新" else "已下载" else "下载",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (hasUpdate) colorScheme.error else colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    // ===== 下载进度条 =====
+                    if (isDownloading) {
+                        item {
+                            val (done, total) = downloadProgress
+                            val progress = if (total > 0) done.toFloat() / total else 0f
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Spacer(Modifier.height(4.dp))
+                                LinearProgressIndicator(
+                                    progress = { progress },
+                                    modifier = Modifier.fillMaxWidth().height(6.dp),
+                                    color = colorScheme.primary,
+                                    trackColor = colorScheme.surfaceContainerHighest,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "下载中 $done/$total 页",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
                             }
                         }
                     }

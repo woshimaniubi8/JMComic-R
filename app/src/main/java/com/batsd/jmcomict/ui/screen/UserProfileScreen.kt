@@ -36,7 +36,8 @@ fun UserProfileScreen(
     onViewAllHistory: () -> Unit = {},
     onHideHistoryItem: (String) -> Unit = {},
     onLoadHistory: () -> Unit = {},
-    onSettingsClick: () -> Unit = {}
+    onSettingsClick: () -> Unit = {},
+    onDownloadsClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
@@ -226,17 +227,21 @@ fun UserProfileScreen(
                 }
             }
 
-            // ===== 设置按钮：独占一排 =====
+            // ===== 操作按钮 =====
             item {
-                Spacer(Modifier.height(2.dp))
-                FilledTonalButton(onClick = onSettingsClick,
-                    modifier = Modifier.fillMaxWidth().height(48.dp), shape = MaterialTheme.shapes.medium) {
-                    Icon(Icons.Default.Settings, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp)); Text("设置")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FilledTonalButton(onClick = onDownloadsClick,
+                        modifier = Modifier.weight(1f).height(48.dp), shape = MaterialTheme.shapes.medium) {
+                        Icon(Icons.Default.CloudDownload, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp)); Text("本地下载")
+                    }
+                    FilledTonalButton(onClick = onSettingsClick,
+                        modifier = Modifier.weight(1f).height(48.dp), shape = MaterialTheme.shapes.medium) {
+                        Icon(Icons.Default.Settings, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp)); Text("设置")
+                    }
                 }
             }
-
-            // 设置按钮独占一排已在上方
         }
     }
 

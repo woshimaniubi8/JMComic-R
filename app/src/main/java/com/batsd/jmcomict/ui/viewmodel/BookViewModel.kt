@@ -71,6 +71,7 @@ class BookViewModel(
 
     /** 当前正在查看的 bookId，用于保存/恢复阅读进度 */
     private var currentBookId: String = ""
+    fun getCurrentBookId(): String = currentBookId
     /** 当前正在查看的 epsId */
     private var currentEpsId: String = ""
     
@@ -118,6 +119,19 @@ class BookViewModel(
             _bookDetail.value = null
             android.util.Log.d("BookVM", "============ 开始获取漫画详情: $bookId ============")
 
+            // 已下载的漫画直接加载本地数据，无需网络
+            val localDetail = com.batsd.jmcomict.data.download.DownloadManager.loadBookDetail(bookId)
+            if (localDetail != null) {
+                android.util.Log.i("BookVM", "✓ 从本地加载漫画详情: $bookId")
+                _bookDetail.value = localDetail
+                val series = localDetail.getEffectiveSeries()
+                _lastReadChapterId.value = series.firstOrNull { eps ->
+                    prefsManager.getReadingHistory(bookId, eps.epsId) > 0
+                }?.epsId ?: series.firstOrNull()?.epsId
+                _isLoading.value = false
+                return@launch
+            }
+
             bookRepository.getBookDetail(bookId)
                 .onSuccess { detail ->
                     android.util.Log.d("BookVM", "✓ 漫画详情获取成功")
@@ -134,8 +148,8 @@ class BookViewModel(
                     }?.epsId ?: series.firstOrNull()?.epsId
                 }
                 .onFailure { exception ->
+                    android.util.Log.e("BookVM", "✗ 网络获取失败: ${exception.message}")
                     _error.value = exception.message
-                    android.util.Log.e("BookVM", "✗ 获取漫画详情失败: $bookId", exception)
                 }
 
             _isLoading.value = false
@@ -148,8 +162,27 @@ class BookViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
-            _scrambleId.value = 220980  // 重置为默认值，而非 0，确保初期显示时已有合理的解密参数
+            _scrambleId.value = 220980
             val imgBaseUrl = com.batsd.jmcomict.data.api.ApiClientFactory.getImageBaseUrl()
+
+            // 检查是否有本地下载的图片 — 有则直接使用，跳过网络
+            if (currentBookId.isNotEmpty()) {
+                val localImages = com.batsd.jmcomict.data.download.DownloadManager.getLocalChapterImages(currentBookId, epsId)
+                if (localImages.isNotEmpty()) {
+                    android.util.Log.i("BookVM", "使用本地图片加载章节: $epsId, ${localImages.size}张")
+                    val fallbackEps = com.batsd.jmcomict.data.model.BookEps(id = epsId).apply {
+                        pictureUrl = localImages
+                        pages = localImages.size
+                    }
+                    _episodeDetail.value = fallbackEps
+                    val savedPage = if (currentBookId.isNotEmpty()) {
+                        prefsManager.getReadingHistory(currentBookId, epsId)
+                    } else 0
+                    _currentPage.value = savedPage
+                    _isLoading.value = false
+                    return@launch
+                }
+            }
 
             // 1. 获取章节信息 (/chapter API 已包含 images 列表)
             bookRepository.getEpisodeDetail(epsId)
@@ -163,7 +196,17 @@ class BookViewModel(
                         episode.pages = episode.images.size
                         _episodeImages.value = episode.pictureUrl
                     }
-                    // 先设置 episode（scrambleId 尚未获取）
+                    // 检查是否有本地下载的图片
+                    if (currentBookId.isNotEmpty()) {
+                        val localImages = com.batsd.jmcomict.data.download.DownloadManager.getLocalChapterImages(currentBookId, epsId)
+                        if (localImages.isNotEmpty()) {
+                            episode.pictureUrl = localImages
+                            episode.pages = localImages.size
+                            _episodeImages.value = localImages
+                            android.util.Log.i("BookVM", "使用本地图片: ${localImages.size}张")
+                        }
+                    }
+                    // 先设置 episode
                     _episodeDetail.value = episode
 
                     // 恢复阅读进度

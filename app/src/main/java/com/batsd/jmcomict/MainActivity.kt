@@ -24,6 +24,7 @@ import com.batsd.jmcomict.R
 import coil.ImageLoader
 import coil.compose.LocalImageLoader
 import com.batsd.jmcomict.data.api.ApiClientFactory
+import com.batsd.jmcomict.data.download.DownloadManager
 import com.batsd.jmcomict.data.local.PreferencesManager
 import com.batsd.jmcomict.data.repository.BookRepository
 import com.batsd.jmcomict.data.repository.CategoryRepository
@@ -42,6 +43,7 @@ class MainActivity : ComponentActivity() {
 
         val prefs = PreferencesManager(this)
         ApiClientFactory.init(this)
+        DownloadManager.init(this)
         val userRepository = UserRepository(prefs)
         val bookRepository = BookRepository()
         val categoryRepository = CategoryRepository()

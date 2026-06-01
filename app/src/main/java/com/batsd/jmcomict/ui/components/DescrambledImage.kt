@@ -43,19 +43,28 @@ fun DescrambledImage(
         isLoading = true
         try {
             val result = withContext(Dispatchers.IO) {
-                val request = Request.Builder().url(imageUrl).build()
-                val response = client.newCall(request).execute()
-                if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
-                val bytes = response.body?.bytes() ?: throw Exception("Empty body")
-
-                val opts = BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                if (imageUrl.startsWith("file://") || imageUrl.startsWith("/")) {
+                    val path = imageUrl.removePrefix("file://")
+                    val opts = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    val localBmp = BitmapFactory.decodeFile(path, opts)
+                        ?: throw Exception("本地文件解码失败: $path")
+                    localBmp  // 本地已解密图片，直接返回
+                } else {
+                    val request = Request.Builder().url(imageUrl).build()
+                    val response = client.newCall(request).execute()
+                    if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
+                    val bytes = response.body?.bytes() ?: throw Exception("Empty body")
+                    response.close()
+                    val opts = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                        ?: throw Exception("Decode failed")
+                    val num = ImageDescrambler.getNumFromUrl(scrambleId, imageUrl)
+                    ImageDescrambler.descramble(src, num)
                 }
-                val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-                    ?: throw Exception("Decode failed")
-
-                val num = ImageDescrambler.getNumFromUrl(scrambleId, imageUrl)
-                ImageDescrambler.descramble(src, num)
             }
             bitmap = result
             ImageCache.put(imageUrl, result)

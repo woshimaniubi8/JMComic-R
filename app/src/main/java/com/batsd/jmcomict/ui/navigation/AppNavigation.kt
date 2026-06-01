@@ -22,6 +22,7 @@ import com.batsd.jmcomict.ui.viewmodel.CategoryViewModel
 import com.batsd.jmcomict.ui.viewmodel.UserViewModel
 import com.batsd.jmcomict.data.api.ApiClientFactory
 import com.batsd.jmcomict.data.local.PreferencesManager
+import kotlinx.coroutines.launch
 
 data class NavItem(val label: String, val icon: ImageVector, val screen: MainTab)
 enum class MainTab { Home, Search, Favorites, Profile }
@@ -36,6 +37,7 @@ sealed class SubScreen {
     object History : SubScreen()
     object LineTest : SubScreen()
     object About : SubScreen()
+    object Downloads : SubScreen()
 }
 
 val navItems = listOf(
@@ -108,6 +110,7 @@ fun MainScreen(
             is SubScreen.LineTest -> subScreen = SubScreen.Settings
             is SubScreen.Settings -> subScreen = SubScreen.None
             is SubScreen.About -> subScreen = SubScreen.Settings
+            is SubScreen.Downloads -> subScreen = SubScreen.None
             else -> subScreen = SubScreen.None
         }
     }
@@ -156,6 +159,7 @@ fun MainScreen(
                 (initialState is SubScreen.BookDetail && targetState !is SubScreen.Reader) ||
                 (initialState is SubScreen.LineTest && targetState is SubScreen.Settings) ||
                 (initialState is SubScreen.About && targetState is SubScreen.Settings) ||
+                (initialState is SubScreen.Downloads) ||
                 (initialState is SubScreen.Reader)
             if (isGoingBack) {
                 // 返回：向右滑出
@@ -169,6 +173,9 @@ fun MainScreen(
         },
         label = "subscreen_transition"
     ) { screen ->
+        // 响应式收集下载进度
+        val dlProgress by com.batsd.jmcomict.data.download.DownloadManager.downloadProgress.collectAsState()
+        val dlBooks by com.batsd.jmcomict.data.download.DownloadManager.downloadedBooks.collectAsState()
         when (screen) {
             is SubScreen.BookDetail -> {
                 val detail = bookDetail; val id = screen.bookId
@@ -202,18 +209,72 @@ fun MainScreen(
                     onLoadComments = { bookViewModel.getComments(id) },
                     onLoadMoreComments = { page -> bookViewModel.getComments(id, page.toString()) },
                     onPostComment = { text, _ -> bookViewModel.postComment(id, text) },
-                    commentResult = commentResult
+                    commentResult = commentResult,
+                    isDownloaded = dlBooks.any { it.bookId == id },
+                    isDownloading = dlProgress.values.any {
+                        it.status == com.batsd.jmcomict.data.download.DownloadTaskStatus.DOWNLOADING
+                    },
+                    downloadProgress = com.batsd.jmcomict.data.download.DownloadManager.getBookProgress(id),
+                    hasUpdate = detail?.let { comicDetail ->
+                        if (dlBooks.any { it.bookId == id }) {
+                            val localEpsIds = com.batsd.jmcomict.data.download.DownloadManager.getLocalEpsIds(id)
+                            val serverEpsIds = comicDetail.getEffectiveSeries().map { it.epsId }
+                            serverEpsIds.any { it !in localEpsIds }
+                        } else false
+                    } ?: false,
+                    onDownloadClick = {
+                        android.util.Log.d("AppNav", "Download book: $id")
+                        if (detail != null) {
+                            // 立即显示加载动画
+                            val firstEpsId = detail.getEffectiveSeries().firstOrNull()?.epsId ?: id
+                            com.batsd.jmcomict.data.download.DownloadManager.markDownloading(firstEpsId, detail.title)
+                            kotlinx.coroutines.MainScope().launch {
+                                val repo = com.batsd.jmcomict.data.repository.BookRepository()
+                                val episodes = detail.getEffectiveSeries()
+                                val imgBaseUrl = com.batsd.jmcomict.data.api.ApiClientFactory.getImageBaseUrl()
+                                episodes.forEach { eps ->
+                                    var scrambleId = 220980
+                                    var imageUrls = listOf<String>()
+                                    repo.getChapterViewTemplate(eps.epsId).onSuccess { s ->
+                                        scrambleId = s.scrambleId.toIntOrNull() ?: 220980
+                                    }
+                                    repo.getEpisodeDetail(eps.epsId).onSuccess { ep ->
+                                        if (ep.images.isNotEmpty()) {
+                                            imageUrls = ep.images.map { img ->
+                                                "$imgBaseUrl/media/photos/${eps.epsId}/$img"
+                                            }
+                                        }
+                                    }
+                                    val fullEps = eps.copy().apply {
+                                        pictureUrl = imageUrls
+                                        pictureName = imageUrls.map { it.substringAfterLast("/") }
+                                        pages = imageUrls.size
+                                    }
+                                    com.batsd.jmcomict.data.download.DownloadManager.downloadChapter(
+                                        detail, fullEps, scrambleId, this
+                                    )
+                                }
+                            }
+                        }
+                    }
                 )
                 }
             }
-            is SubScreen.Reader -> ReaderScreen(
-                episode = episodeDetail, currentPage = currentPage,
-                scrambleId = scrambleId, isLoading = bookIsLoading,
-                onBackClick = { subScreen = previousSubScreen.also { previousSubScreen = SubScreen.None } },
-                onPreviousPage = { if (currentPage > 0) bookViewModel.setCurrentPage(currentPage - 1) },
-                onNextPage = { bookViewModel.setCurrentPage(currentPage + 1) },
-                onPageSelect = { bookViewModel.setCurrentPage(it) }
-            )
+            is SubScreen.Reader -> {
+                val readEpsId = (subScreen as? SubScreen.Reader)?.epsId ?: ""
+                val localImages = com.batsd.jmcomict.data.download.DownloadManager.getLocalChapterImages(
+                    bookViewModel.getCurrentBookId(), readEpsId
+                )
+                ReaderScreen(
+                    episode = episodeDetail, currentPage = currentPage,
+                    scrambleId = scrambleId, isLoading = bookIsLoading,
+                    localImagePaths = localImages,
+                    onBackClick = { subScreen = previousSubScreen.also { previousSubScreen = SubScreen.None } },
+                    onPreviousPage = { if (currentPage > 0) bookViewModel.setCurrentPage(currentPage - 1) },
+                    onNextPage = { bookViewModel.setCurrentPage(currentPage + 1) },
+                    onPageSelect = { bookViewModel.setCurrentPage(it) }
+                )
+            }
             is SubScreen.Category -> CategoryScreen(
                 categories = categories, isLoading = categoryIsLoading,
                 onBackClick = { subScreen = SubScreen.None },
@@ -298,6 +359,14 @@ fun MainScreen(
             is SubScreen.About -> AboutScreen(
                 versionName = versionName,
                 onBackClick = { subScreen = SubScreen.Settings }
+            )
+            is SubScreen.Downloads -> DownloadsScreen(
+                onBackClick = { subScreen = SubScreen.None },
+                onBookClick = { bookId ->
+                    bookViewModel.getBookDetail(bookId)
+                    previousSubScreen = SubScreen.None
+                    subScreen = SubScreen.BookDetail(bookId)
+                }
             )
             is SubScreen.History -> HistoryScreen(
                 history = history,
@@ -476,7 +545,8 @@ fun MainScreen(
                     onViewAllHistory = { subScreen = SubScreen.History },
                     onHideHistoryItem = { bookViewModel.hideHistoryItem(it) },
                     onLoadHistory = { bookViewModel.getHistory() },
-                    onSettingsClick = { subScreen = SubScreen.Settings }
+                    onSettingsClick = { subScreen = SubScreen.Settings },
+                    onDownloadsClick = { subScreen = SubScreen.Downloads }
                 )
                 }
             }
