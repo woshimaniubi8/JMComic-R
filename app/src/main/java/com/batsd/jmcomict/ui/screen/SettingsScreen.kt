@@ -44,6 +44,7 @@ fun SettingsScreen(
     var showCdnDialog by remember { mutableStateOf(false) }
     var showImageCdnDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showLogoutConfirm by remember { mutableStateOf(false) }
     val colorScheme = MaterialTheme.colorScheme
     val modeNames = listOf("跟随系统", "浅色", "深色")
     val toast = LocalToast.current
@@ -163,7 +164,7 @@ fun SettingsScreen(
             if (isLoggedIn) {
                 item { Spacer(Modifier.height(8.dp)); InfoHeader(title = "账户", icon = Icons.Default.Person) }
                 item {
-                    CommonCard(variant = CardVariant.Filled, onClick = onLogoutClick) {
+                    CommonCard(variant = CardVariant.Filled, onClick = { showLogoutConfirm = true }) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -297,6 +298,34 @@ fun SettingsScreen(
                     }
                 }
             }
+        )
+    }
+
+    if (showLogoutConfirm) {
+        AlertDialog(
+            onDismissRequest = { showLogoutConfirm = false },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { showLogoutConfirm = false }) {
+                        Text("取消")
+                    }
+                    Button(
+                        onClick = {
+                            showLogoutConfirm = false
+                            onLogoutClick()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colorScheme.error
+                        )
+                    ) {
+                        Text("确认退出", color = colorScheme.onError)
+                    }
+                }
+            },
+            title = { Text("退出登录") },
+            text = { Text("确定要退出登录吗？退出后需要重新输入账号密码。") },
+            shape = MaterialTheme.shapes.medium,
+            containerColor = colorScheme.surfaceContainerHigh
         )
     }
 }
