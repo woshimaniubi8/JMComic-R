@@ -76,6 +76,7 @@ fun MainScreen(
     var subScreen by remember { mutableStateOf<SubScreen>(SubScreen.None) }
     var previousSubScreen by remember { mutableStateOf<SubScreen>(SubScreen.None) }
     var searchHistory by remember { mutableStateOf(emptyList<String>()) }
+    var searchQuery by remember { mutableStateOf("") }
     var selectedSection by remember { mutableIntStateOf(0) }
     // 同步恢复 CDN 分流索引（API 和图片 CDN 独立恢复）
     val initialApiIndex = prefs.getApiUrlIndex().coerceIn(0, ApiClientFactory.getApiUrlCount() - 1)
@@ -215,6 +216,15 @@ fun MainScreen(
                         it.status == com.batsd.jmcomict.data.download.DownloadTaskStatus.DOWNLOADING
                     },
                     downloadProgress = com.batsd.jmcomict.data.download.DownloadManager.getBookProgress(id),
+                    onSearchTagClick = { query ->
+                        if (query.isNotBlank()) {
+                            searchQuery = query
+                            previousSubScreen = SubScreen.None
+                            subScreen = SubScreen.None
+                            selectedTab = MainTab.Search
+                            bookViewModel.searchBooks(query)
+                        }
+                    },
                     hasUpdate = detail?.let { comicDetail ->
                         if (dlBooks.any { it.bookId == id }) {
                             val localEpsIds = com.batsd.jmcomict.data.download.DownloadManager.getLocalEpsIds(id)
@@ -483,8 +493,9 @@ fun MainScreen(
                 MainTab.Search -> SearchScreen(
                     bookList = bookList, isLoading = bookIsLoading,
                     searchHistory = searchHistory,
+                    initialQuery = searchQuery,
                     onClearHistory = { searchHistory = emptyList() },
-                    onBackClick = { selectedTab = MainTab.Home },
+                    onBackClick = { selectedTab = MainTab.Home; searchQuery = "" },
                     onSearchClick = { query ->
                         searchHistory = (listOf(query) + searchHistory.filter { it != query }).take(50)
                         // JM码识别：纯数字 或 JM/Jm/jm开头

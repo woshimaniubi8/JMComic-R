@@ -54,6 +54,7 @@ fun BookDetailScreen(
     isDownloaded: Boolean = false,
     hasUpdate: Boolean = false,
     onDownloadClick: () -> Unit = {},
+    onSearchTagClick: (String) -> Unit = {},
     isDownloading: Boolean = false,
     downloadProgress: Pair<Int, Int> = 0 to 0
 ) {
@@ -203,7 +204,8 @@ fun BookDetailScreen(
                                             Text(
                                                 "作者: ${detail.authorList.joinToString(", ")}",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = colorScheme.onSurfaceVariant.opacity60
+                                            color = colorScheme.onSurfaceVariant.opacity60,
+                                            modifier = Modifier.clickable { onSearchTagClick(detail.authorList.firstOrNull() ?: "") }
                                             )
                                         }
                                     }
@@ -253,7 +255,7 @@ fun BookDetailScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 detail.tags.forEach { tag ->
-                                    CommonChip(label = tag)
+                                    CommonChip(label = tag, onClick = { onSearchTagClick(tag) })
                                 }
                             }
                         }
@@ -269,7 +271,7 @@ fun BookDetailScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 detail.actors.forEach { actor ->
-                                    CommonChip(label = actor)
+                                    CommonChip(label = actor, onClick = { onSearchTagClick(actor) })
                                 }
                             }
                         }

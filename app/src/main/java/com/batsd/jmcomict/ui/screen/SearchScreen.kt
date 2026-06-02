@@ -34,9 +34,16 @@ fun SearchScreen(
     onBackClick: () -> Unit,
     onSearchClick: (String) -> Unit,
     onBookClick: (String) -> Unit,
-    onClearHistory: () -> Unit = {}
+    onClearHistory: () -> Unit = {},
+    initialQuery: String = ""
 ) {
-    var searchQuery by remember { mutableStateOf("") }
+    var searchQuery by remember(initialQuery) { mutableStateOf(initialQuery) }
+    // 用户手动输入后清除 initialQuery 影响
+    LaunchedEffect(initialQuery) {
+        if (initialQuery.isNotEmpty()) {
+            searchQuery = initialQuery
+        }
+    }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val colorScheme = MaterialTheme.colorScheme

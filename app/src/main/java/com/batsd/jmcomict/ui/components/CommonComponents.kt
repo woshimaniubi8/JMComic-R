@@ -286,45 +286,26 @@ fun CommonChip(
 ) {
     val colorScheme = MaterialTheme.colorScheme
 
-    if (onClick != null) {
-        AssistChip(
-            onClick = onClick,
-            label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-            leadingIcon = leadingIcon?.let {
-                { Icon(it, null, modifier = Modifier.size(16.dp)) }
-            },
-            modifier = modifier,
-            shape = MaterialTheme.shapes.small,
-            colors = AssistChipDefaults.assistChipColors(
-                containerColor = if (selected) colorScheme.secondaryContainer
-                else colorScheme.surfaceContainerHigh,
-                labelColor = if (selected) colorScheme.onSecondaryContainer
-                else colorScheme.onSurfaceVariant
-            ),
-            border = AssistChipDefaults.assistChipBorder(
-                borderColor = if (selected) colorScheme.primary.opacity60
-                else colorScheme.outlineVariant,
-                enabled = true
-            )
-        )
-    } else {
-        // 纯展示标签
-        Surface(
-            modifier = modifier,
-            shape = MaterialTheme.shapes.small,
-            color = colorScheme.surfaceContainerHigh,
-            border = androidx.compose.foundation.BorderStroke(1.dp, colorScheme.outlineVariant)
+    // 统一使用 Surface 风格，保持标签外观一致（无论是否可点击）
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = if (selected) colorScheme.secondaryContainer else colorScheme.surfaceContainerHigh,
+        border = androidx.compose.foundation.BorderStroke(1.dp,
+            if (selected) colorScheme.primary.opacity60 else colorScheme.outlineVariant),
+        onClick = onClick ?: {}
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (leadingIcon != null) {
-                    Icon(leadingIcon, null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                }
-                Text(label, style = MaterialTheme.typography.labelMedium)
+            if (leadingIcon != null) {
+                Icon(leadingIcon, null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
             }
+            Text(label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selected) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant)
         }
     }
 }
