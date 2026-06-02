@@ -40,6 +40,7 @@ fun DownloadsScreen(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val downloadedBooks by DownloadManager.downloadedBooks.collectAsState()
+    var showDeleteConfirm by remember { mutableStateOf<DownloadedBook?>(null) }
 
     Scaffold(
         topBar = {
@@ -99,11 +100,51 @@ fun DownloadsScreen(
                     DownloadedBookCard(
                         book = book,
                         onClick = { onBookClick(book.bookId) },
-                        onDelete = { DownloadManager.deleteDownload(book.bookId) }
+                        onDelete = { showDeleteConfirm = book }
                     )
                 }
             }
         }
+    }
+
+    // 删除确认对话框
+    if (showDeleteConfirm != null) {
+        val bookToDelete = showDeleteConfirm!!
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = null },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { showDeleteConfirm = null }) {
+                        Text("取消")
+                    }
+                    Button(
+                        onClick = {
+                            DownloadManager.deleteDownload(bookToDelete.bookId)
+                            showDeleteConfirm = null
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("确认删除", color = MaterialTheme.colorScheme.onError)
+                    }
+                }
+            },
+            title = { Text("确认删除") },
+            text = {
+                Column {
+                    Text("确定要删除「${bookToDelete.title}」的所有本地数据吗？")
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "将删除 ${bookToDelete.chapters.sumOf { it.pageCount }} 页图片和漫画信息，此操作不可恢复。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            shape = MaterialTheme.shapes.medium,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
     }
 }
 

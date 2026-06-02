@@ -216,7 +216,9 @@ object DownloadManager {
 
     /** 删除下载 */
     fun deleteDownload(bookId: String) {
-        bookDir(bookId).deleteRecursively()
+        val dir = bookDir(bookId)
+        val deleted = dir.deleteRecursively()
+        android.util.Log.i("DownloadManager", "删除下载: bookId=$bookId, dir=${dir.absolutePath}, success=$deleted")
         _downloadedBooks.value = _downloadedBooks.value.filter { it.bookId != bookId }
         saveIndex()
     }
