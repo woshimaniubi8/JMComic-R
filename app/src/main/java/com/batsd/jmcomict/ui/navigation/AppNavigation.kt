@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -98,7 +99,10 @@ fun MainScreen(
     val userIsLoading by userViewModel.isLoading.collectAsState()
     val userError by userViewModel.error.collectAsState()
 
-    // 系统返回键处理
+    // 双击返回退出
+    var backPressedTime by remember { mutableLongStateOf(0L) }
+
+    // 系统返回键处理（子页面）
     BackHandler(enabled = subScreen !is SubScreen.None) {
         when (subScreen) {
             is SubScreen.Reader -> subScreen = previousSubScreen.also { previousSubScreen = SubScreen.None }
@@ -113,6 +117,17 @@ fun MainScreen(
             is SubScreen.About -> subScreen = SubScreen.Settings
             is SubScreen.Downloads -> subScreen = SubScreen.None
             else -> subScreen = SubScreen.None
+        }
+    }
+
+    // 主页面双击返回退出
+    BackHandler(enabled = subScreen is SubScreen.None) {
+        val now = System.currentTimeMillis()
+        if (now - backPressedTime > 2000) {
+            backPressedTime = now
+            android.widget.Toast.makeText(context, "再按一次返回退出", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            (context as? android.app.Activity)?.finish()
         }
     }
 
