@@ -148,7 +148,7 @@ fun MainScreen(
     LaunchedEffect(selectedTab) {
         when (selectedTab) {
             MainTab.Home -> if (bookList.isEmpty()) bookViewModel.getHomeSections()
-            MainTab.Favorites -> bookViewModel.getFavorites()
+            MainTab.Favorites -> if (bookViewModel.favorites.value.isEmpty()) bookViewModel.getFavorites()
             MainTab.Profile -> bookViewModel.getHistory()
             else -> {}
         }
@@ -537,6 +537,7 @@ fun MainScreen(
                     val favs by bookViewModel.favorites.collectAsState()
                     FavoritesScreen(
                         favoriteBooks = favs, isLoading = bookIsLoading,
+                        hasMore = bookViewModel.favoritesHasMore,
                         onBackClick = { selectedTab = MainTab.Home },
                         onBookClick = { id ->
                             bookViewModel.getBookDetail(id)
@@ -546,7 +547,8 @@ fun MainScreen(
                         onRemoveFavorite = { id ->
                             bookViewModel.toggleFavorite(id)
                             bookViewModel.getFavorites()
-                        }
+                        },
+                        onLoadMore = { bookViewModel.loadMoreFavorites() }
                     )
                 }
                 MainTab.Profile -> {

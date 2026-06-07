@@ -4,6 +4,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -28,9 +29,11 @@ import com.batsd.jmcomict.ui.components.*
 fun FavoritesScreen(
     favoriteBooks: List<BookItem>,
     isLoading: Boolean,
+    hasMore: Boolean = false,
     onBackClick: () -> Unit,
     onBookClick: (String) -> Unit,
-    onRemoveFavorite: (String) -> Unit
+    onRemoveFavorite: (String) -> Unit,
+    onLoadMore: () -> Unit = {}
 ) {
     val colorScheme = MaterialTheme.colorScheme
 
@@ -58,7 +61,7 @@ fun FavoritesScreen(
             // 内容
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
-                    isLoading -> {
+                    isLoading && favoriteBooks.isEmpty() -> {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -73,7 +76,22 @@ fun FavoritesScreen(
                         )
                     }
                     else -> {
+                        val listState = rememberLazyListState()
+                        // 检测滚动到底部以加载更多
+                        val shouldLoadMore by remember {
+                            derivedStateOf {
+                                val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                                lastVisible >= favoriteBooks.size - 3 && favoriteBooks.size >= 20
+                            }
+                        }
+                        // 同时监听shouldLoadMore和isLoading：shouldLoadMore触发首次加载，isLoading变化触发后续页
+                        LaunchedEffect(shouldLoadMore, isLoading) {
+                            if (shouldLoadMore && hasMore && !isLoading) {
+                                onLoadMore()
+                            }
+                        }
                         LazyColumn(
+                            state = listState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(12.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -84,6 +102,21 @@ fun FavoritesScreen(
                                     onClick = { onBookClick(book.id) },
                                     onRemove = { onRemoveFavorite(book.id) }
                                 )
+                            }
+                            if (isLoading) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

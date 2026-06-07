@@ -7,7 +7,7 @@ import com.batsd.jmcomict.data.api.JMComicApiService
 class CommentRepository {
     private val apiService: JMComicApiService get() = ApiClientFactory.getApiService()
 
-    suspend fun getComments(bookId: String, page: String = "1"): Result<CommentListData> {
+    suspend fun getComments(bookId: String, page: String = "0"): Result<CommentListData> {
         return try {
             val response = apiService.getComments(bookId = bookId, page = page)
             if (response.isSuccess()) {

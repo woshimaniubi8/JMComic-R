@@ -143,8 +143,12 @@ class BookRepository {
         }
     }
 
-    suspend fun getComments(bookId: String, page: String = "1"): Result<CommentListData> {
+    suspend fun getComments(bookId: String, page: String = "0"): Result<CommentListData> {
         return apiCall({ apiService.getComments(bookId = bookId, page = page) }) { it.decryptAndParse<CommentListData>() }
+    }
+
+    suspend fun getCommentsFromCurrentCdn(bookId: String, page: String = "0"): Result<CommentListData> {
+        return apiCall({ apiService.getCommentsFromCurrentCdn(bookId = bookId, page = page) }) { it.decryptAndParse<CommentListData>() }
     }
 
     suspend fun postComment(bookId: String, content: String, replyTo: String = ""): Result<String> {

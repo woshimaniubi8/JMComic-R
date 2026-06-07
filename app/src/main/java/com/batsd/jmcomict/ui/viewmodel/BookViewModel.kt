@@ -284,15 +284,35 @@ class BookViewModel(
         }
     }
 
+    /** 收藏当前页码 */
+    private var _favoritesPage = 1
+    private var _favoritesHasMore = true
+    private var _favoritesLoadingMore = false
+    val favoritesHasMore: Boolean get() = _favoritesHasMore
+
     fun getFavorites(page: Int = 1, sort: String = "mr") {
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
+            _favoritesPage = page
             bookRepository.getFavorites(page, sort)
-                .onSuccess { books -> _favorites.value = books }
+                .onSuccess { books ->
+                    _favorites.value = if (page == 1) books else _favorites.value + books
+                    // 如果返回的条数少于20（每页预期条数），说明没有更多了
+                    _favoritesHasMore = books.size >= 20
+                    android.util.Log.d("BookVM", "getFavorites: page=$page, got=${books.size}, " +
+                        "accumulated=${_favorites.value.size}, hasMore=$_favoritesHasMore")
+                }
                 .onFailure { _error.value = it.message }
             _isLoading.value = false
+            _favoritesLoadingMore = false
         }
+    }
+
+    fun loadMoreFavorites(sort: String = "mr") {
+        if (!_favoritesHasMore || _favoritesLoadingMore) return
+        _favoritesLoadingMore = true
+        getFavorites(_favoritesPage + 1, sort)
     }
 
     fun setCurrentPage(page: Int) {
@@ -307,15 +327,27 @@ class BookViewModel(
         _error.value = null
     }
 
-    fun getComments(bookId: String, page: String = "1") {
+    fun getComments(bookId: String, page: String = "0") {
+        android.util.Log.d("BookVM", "getComments: bookId=$bookId, page=$page")
         viewModelScope.launch {
-            if (page == "1") _isLoading.value = true
+            if (page == "0") {
+                _isLoading.value = true
+                _comments.value = emptyList()  // 切换漫画时清除旧评论
+                _commentCount.value = 0
+            }
             bookRepository.getComments(bookId, page)
                 .onSuccess { data ->
-                    _comments.value = if (page == "1") data.list else _comments.value + data.list
+                    val newList = if (page == "0") data.list else _comments.value + data.list
+                    android.util.Log.d("BookVM", "getComments OK: page=$page, items=${data.list.size}, " +
+                        "total=${data.total}, first=${data.list.firstOrNull()?.addtime ?: "N/A"}, " +
+                        "newList.size=${newList.size}")
+                    _comments.value = newList
                     _commentCount.value = data.total
                 }
-                .onFailure { _error.value = it.message }
+                .onFailure { e ->
+                    android.util.Log.e("BookVM", "getComments FAILED: page=$page, error=${e.message}")
+                    _error.value = e.message
+                }
             _isLoading.value = false
         }
     }
@@ -324,7 +356,12 @@ class BookViewModel(
         viewModelScope.launch {
             bookRepository.postComment(bookId, content)
                 .onSuccess { msg ->
-                    getComments(bookId)
+                    // 从当前CDN刷新评论列表（评论发在哪就从哪拉，确保能看到刚发的评论）
+                    bookRepository.getCommentsFromCurrentCdn(bookId, "0")
+                        .onSuccess { data ->
+                            _comments.value = data.list
+                            _commentCount.value = data.total
+                        }
                     _commentResult.value = true to msg
                 }
                 .onFailure { _commentResult.value = false to (it.message ?: "发送失败") }

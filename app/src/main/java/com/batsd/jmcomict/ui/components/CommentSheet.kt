@@ -37,10 +37,12 @@ fun CommentSheet(
     val toast = LocalToast.current
     val topComments = comments.filter { it.parentCid == "0" || it.parentCid.isEmpty() }
     val replies = comments.filter { it.parentCid != "0" && it.parentCid.isNotEmpty() }
+    // hasMore 应基于顶层评论数量，而非包含回复的扁平列表总长
+    val effectiveHasMore = hasMore && topComments.size < totalCount
 
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("评论 (${if (totalCount > 0) totalCount else comments.size})", style = MaterialTheme.typography.titleMedium)
+            Text("评论 (${if (totalCount > 0) totalCount else topComments.size})", style = MaterialTheme.typography.titleMedium)
             IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "关闭") }
         }
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -54,7 +56,7 @@ fun CommentSheet(
         } else {
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(topComments) { c -> CommentItem(c, replies.filter { it.parentCid == c.cid }) }
-                if (hasMore || isLoading) {
+                if (effectiveHasMore || isLoading) {
                     item {
                         TextButton(onClick = onLoadMore, modifier = Modifier.fillMaxWidth(), enabled = !isLoading) {
                             Text(if (isLoading) "加载中..." else "加载更多")

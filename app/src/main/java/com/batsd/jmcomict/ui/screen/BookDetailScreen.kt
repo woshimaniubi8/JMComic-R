@@ -73,7 +73,7 @@ fun BookDetailScreen(
     var isPosting by remember { mutableStateOf(false) }
     var isFavLoading by remember { mutableStateOf(false) }
     var isLikeLoading by remember { mutableStateOf(false) }
-    var commentPage by remember { mutableIntStateOf(1) }
+    var commentPage by remember { mutableIntStateOf(0) }
     val sheetState = rememberModalBottomSheetState()
 
     // 评论加载完成后重置加载状态
@@ -380,7 +380,7 @@ fun BookDetailScreen(
                                     if (commentsLoading) return@IconButton
                                     commentsLoading = true
                                     showComments = true
-                                    commentPage = 1
+                                    commentPage = 0
                                     onLoadComments()
                                 }, modifier = Modifier.size(48.dp)) {
                                     AnimatedContent(
@@ -517,7 +517,7 @@ fun BookDetailScreen(
                     isPosting = true
                     postCommentAction(text, spoiler)
                 },
-                onDismiss = { showComments = false; commentPage = 1; isPosting = false }
+                onDismiss = { showComments = false; commentPage = 0; isPosting = false }
             )
         }
     }

@@ -169,15 +169,23 @@ interface JMComicApiService {
 
     // ============ 评论相关 ============
 
-    /** 获取评论列表 */
-    @GET("forum")
+    /** 获取评论列表（强制使用分流1，其他CDN节点评论数据不同步） */
+    @GET("https://www.cdnhth.club/forum")
     suspend fun getComments(
         @Query("mode") mode: String = "manhua",
         @Query("aid") bookId: String,
-        @Query("page") page: String = "1"
+        @Query("page") page: String = "0"
     ): ApiResponse
 
-    /** 发表评论 */
+    /** 获取评论列表（使用当前CDN，用于发表评论后的刷新，确保看到刚发的评论） */
+    @GET("forum")
+    suspend fun getCommentsFromCurrentCdn(
+        @Query("mode") mode: String = "manhua",
+        @Query("aid") bookId: String,
+        @Query("page") page: String = "0"
+    ): ApiResponse
+
+    /** 发表评论（使用当前CDN，分流1需要不同认证cookie） */
     @FormUrlEncoded
     @POST("comment")
     suspend fun postComment(
