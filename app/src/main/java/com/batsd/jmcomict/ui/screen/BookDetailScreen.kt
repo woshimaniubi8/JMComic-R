@@ -27,6 +27,7 @@ import android.content.Context
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import com.batsd.jmcomict.data.api.ApiClientFactory
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import com.batsd.jmcomict.data.model.BookDetail
 import com.batsd.jmcomict.data.model.BookEps
 import com.batsd.jmcomict.data.model.CommentInfo
@@ -56,7 +57,9 @@ fun BookDetailScreen(
     onDownloadClick: () -> Unit = {},
     onSearchTagClick: (String) -> Unit = {},
     isDownloading: Boolean = false,
-    downloadProgress: Pair<Int, Int> = 0 to 0
+    downloadProgress: Pair<Int, Int> = 0 to 0,
+    onRefresh: () -> Unit = {},
+    onCommentClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
@@ -131,11 +134,12 @@ fun BookDetailScreen(
             }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+        PullToRefreshBox(
+            isRefreshing = isLoading && bookDetail != null,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize().padding(padding)
         ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             TopAppBar(
                 title = { Text("漫画详情", maxLines = 1) },
                 navigationIcon = {
@@ -377,28 +381,11 @@ fun BookDetailScreen(
                             // 评论
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 IconButton(onClick = {
-                                    if (commentsLoading) return@IconButton
-                                    commentsLoading = true
-                                    showComments = true
-                                    commentPage = 0
                                     onLoadComments()
+                                    onCommentClick()
                                 }, modifier = Modifier.size(48.dp)) {
-                                    AnimatedContent(
-                                        targetState = commentsLoading,
-                                        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
-                                        label = "comment_loading"
-                                    ) { loading ->
-                                        if (loading) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(20.dp),
-                                                strokeWidth = 2.dp,
-                                                color = colorScheme.primary
-                                            )
-                                        } else {
-                                            Icon(Icons.Default.ChatBubbleOutline, "评论", Modifier.size(22.dp),
-                                                tint = colorScheme.onSurfaceVariant)
-                                        }
-                                    }
+                                    Icon(Icons.Default.ChatBubbleOutline, "评论", Modifier.size(22.dp),
+                                        tint = colorScheme.onSurfaceVariant)
                                 }
                                 Text("评论", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
                             }
@@ -520,6 +507,7 @@ fun BookDetailScreen(
                 onDismiss = { showComments = false; commentPage = 0; isPosting = false }
             )
         }
+    }
     }
 
     // ===== 操作结果提示 =====

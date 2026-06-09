@@ -20,6 +20,7 @@ import coil.compose.AsyncImage
 import com.batsd.jmcomict.data.api.ApiClientFactory
 import com.batsd.jmcomict.data.model.BookItem
 import com.batsd.jmcomict.ui.components.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 
 /**
  * 收藏列表 — FlClash 列表项风格
@@ -33,7 +34,8 @@ fun FavoritesScreen(
     onBackClick: () -> Unit,
     onBookClick: (String) -> Unit,
     onRemoveFavorite: (String) -> Unit,
-    onLoadMore: () -> Unit = {}
+    onLoadMore: () -> Unit = {},
+    onRefresh: () -> Unit = {}
 ) {
     val colorScheme = MaterialTheme.colorScheme
 
@@ -53,11 +55,12 @@ fun FavoritesScreen(
         },
         containerColor = colorScheme.background
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = padding.calculateTopPadding())
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())
         ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             // 内容
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
@@ -123,6 +126,7 @@ fun FavoritesScreen(
                 }
             }
         }
+    }
     }
 }
 

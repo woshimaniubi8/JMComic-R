@@ -341,7 +341,8 @@ class BookViewModel(
                     android.util.Log.d("BookVM", "getComments OK: page=$page, items=${data.list.size}, " +
                         "total=${data.total}, first=${data.list.firstOrNull()?.addtime ?: "N/A"}, " +
                         "newList.size=${newList.size}")
-                    _comments.value = newList
+                    // 强制发射新值（即使空列表也要触发重组，解决无评论时加载动画不消失）
+                    _comments.value = ArrayList(newList)
                     _commentCount.value = data.total
                 }
                 .onFailure { e ->
@@ -359,7 +360,7 @@ class BookViewModel(
                     // 从当前CDN刷新评论列表（评论发在哪就从哪拉，确保能看到刚发的评论）
                     bookRepository.getCommentsFromCurrentCdn(bookId, "0")
                         .onSuccess { data ->
-                            _comments.value = data.list
+                            _comments.value = ArrayList(data.list)
                             _commentCount.value = data.total
                         }
                     _commentResult.value = true to msg

@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -149,11 +150,14 @@ fun HomeScreen(
 
     }
     ) { padding ->
-        Column(
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = onRefresh,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding())
         ) {
+        Column(modifier = Modifier.fillMaxSize()) {
 
             // ===== 内容区域 =====
             if (isLoading && bookList.isEmpty()) {
@@ -202,6 +206,7 @@ fun HomeScreen(
                 }
             }
         }
+    }
     }
 }
 

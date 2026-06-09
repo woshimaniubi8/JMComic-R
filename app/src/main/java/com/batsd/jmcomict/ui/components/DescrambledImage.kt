@@ -22,14 +22,15 @@ import okhttp3.Request
 import java.util.Collections
 
 /**
- * 自定义 descramble 图片加载组件 — 绕过 Coil，直接下载+解码+解密
- * 不含缩放（缩放由父级统一控制）
+ * 自定义 descramble 图片加载组件 — 绕过 Coil，直接下载+解码+解密。
+ * @param lowMemory 为 true 时，解密完成后额外降采样 + 转 RGB_565 节省内存（不影响解密过程）。
  */
 @Composable
 fun DescrambledImage(
     imageUrl: String,
     scrambleId: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    lowMemory: Boolean = false
 ) {
     var bitmap by remember(imageUrl, scrambleId) { mutableStateOf<Bitmap?>(ImageCache.get(imageUrl)) }
     var isLoading by remember(imageUrl, scrambleId) { mutableStateOf(bitmap == null) }
@@ -66,8 +67,27 @@ fun DescrambledImage(
                     ImageDescrambler.descramble(src, num)
                 }
             }
-            bitmap = result
-            ImageCache.put(imageUrl, result)
+            // 低内存后处理（不解码路径，仅在原始 result 为 Bitmap 时触发）
+            val finalResult = if (lowMemory && result is android.graphics.Bitmap) {
+                var bmp = result as android.graphics.Bitmap
+                val sw = context.resources.displayMetrics.widthPixels
+                if (bmp.width > sw) {
+                    val ratio = bmp.width.toFloat() / sw
+                    val nw = (bmp.width / ratio).toInt().coerceAtLeast(1)
+                    val nh = (bmp.height / ratio).toInt().coerceAtLeast(1)
+                    val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, nw, nh, true)
+                    if (scaled !== bmp) bmp.recycle()
+                    bmp = scaled
+                }
+                if (bmp.config != android.graphics.Bitmap.Config.RGB_565) {
+                    val c = bmp.copy(android.graphics.Bitmap.Config.RGB_565, false)
+                    if (c !== bmp) bmp.recycle()
+                    bmp = c
+                }
+                bmp
+            } else result
+            bitmap = finalResult
+            if (finalResult is android.graphics.Bitmap) ImageCache.put(imageUrl, finalResult as android.graphics.Bitmap)
             isLoading = false
         } catch (e: Exception) {
             android.util.Log.e("DescrambledImage", "Failed: $imageUrl", e)

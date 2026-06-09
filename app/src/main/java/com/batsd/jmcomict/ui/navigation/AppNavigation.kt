@@ -39,6 +39,9 @@ sealed class SubScreen {
     object LineTest : SubScreen()
     object About : SubScreen()
     object Downloads : SubScreen()
+    object Update : SubScreen()
+    object CompatibilitySettings : SubScreen()
+    data class Comment(val bookId: String) : SubScreen()
 }
 
 val navItems = listOf(
@@ -96,8 +99,13 @@ fun MainScreen(
             ""
         }
     }
+    val updateViewModel = remember { com.batsd.jmcomict.ui.viewmodel.UpdateViewModel(prefs = prefs) }
     val userIsLoading by userViewModel.isLoading.collectAsState()
     val userError by userViewModel.error.collectAsState()
+
+    // 低内存设备弹窗
+    var showLowRamDialog by remember { mutableStateOf(false) }
+    var pendingReaderEpsId by remember { mutableStateOf("") }
 
     // 双击返回退出
     var backPressedTime by remember { mutableLongStateOf(0L) }
@@ -115,6 +123,8 @@ fun MainScreen(
             is SubScreen.LineTest -> subScreen = SubScreen.Settings
             is SubScreen.Settings -> subScreen = SubScreen.None
             is SubScreen.About -> subScreen = SubScreen.Settings
+            is SubScreen.CompatibilitySettings -> subScreen = SubScreen.Settings
+            is SubScreen.Comment -> subScreen = previousSubScreen.also { previousSubScreen = SubScreen.None }
             is SubScreen.Downloads -> subScreen = SubScreen.None
             else -> subScreen = SubScreen.None
         }
@@ -145,6 +155,13 @@ fun MainScreen(
     val history by bookViewModel.history.collectAsState()
     val homeSections by bookViewModel.homeSections.collectAsState()
     val user by userViewModel.user.collectAsState()
+    // 启动时清理旧APK并自动检测版本更新
+    LaunchedEffect(Unit) {
+        updateViewModel.cleanupDownloadedApks(context)
+        if (updateViewModel.autoCheckEnabled) {
+            updateViewModel.checkForUpdates()
+        }
+    }
     LaunchedEffect(selectedTab) {
         when (selectedTab) {
             MainTab.Home -> if (bookList.isEmpty()) bookViewModel.getHomeSections()
@@ -172,9 +189,11 @@ fun MainScreen(
         transitionSpec = {
             val isGoingBack = targetState is SubScreen.None ||
                 (initialState is SubScreen.CategoryBooks && targetState is SubScreen.Category) ||
-                (initialState is SubScreen.BookDetail && targetState !is SubScreen.Reader) ||
+                (initialState is SubScreen.BookDetail && targetState !is SubScreen.Reader && targetState !is SubScreen.Comment) ||
+                (initialState is SubScreen.Comment) ||
                 (initialState is SubScreen.LineTest && targetState is SubScreen.Settings) ||
                 (initialState is SubScreen.About && targetState is SubScreen.Settings) ||
+                (initialState is SubScreen.CompatibilitySettings && targetState is SubScreen.Settings) ||
                 (initialState is SubScreen.Downloads) ||
                 (initialState is SubScreen.Reader)
             if (isGoingBack) {
@@ -210,14 +229,24 @@ fun MainScreen(
                         subScreen = prev
                     },
                     onEpisodeClick = { ep ->
-                        bookViewModel.getEpisodeDetail(ep.epsId)
-                        previousSubScreen = subScreen
-                        subScreen = SubScreen.Reader(ep.epsId)
+                        if (checkLowRamDevice(context) && !hasCompatEnabled(prefs)) {
+                            pendingReaderEpsId = ep.epsId
+                            showLowRamDialog = true
+                        } else {
+                            bookViewModel.getEpisodeDetail(ep.epsId)
+                            previousSubScreen = subScreen
+                            subScreen = SubScreen.Reader(ep.epsId)
+                        }
                     },
                     onStartReading = { epsId ->
-                        bookViewModel.getEpisodeDetail(epsId)
-                        previousSubScreen = subScreen
-                        subScreen = SubScreen.Reader(epsId)
+                        if (checkLowRamDevice(context) && !hasCompatEnabled(prefs)) {
+                            pendingReaderEpsId = epsId
+                            showLowRamDialog = true
+                        } else {
+                            bookViewModel.getEpisodeDetail(epsId)
+                            previousSubScreen = subScreen
+                            subScreen = SubScreen.Reader(epsId)
+                        }
                     },
                     onFavoriteClick = { bookViewModel.toggleFavorite(id) },
                     onAddFavoriteClick = { cb -> bookViewModel.toggleFavorite(id, cb) },
@@ -226,6 +255,10 @@ fun MainScreen(
                     onLoadMoreComments = { page -> bookViewModel.getComments(id, page.toString()) },
                     onPostComment = { text, _ -> bookViewModel.postComment(id, text) },
                     commentResult = commentResult,
+                    onCommentClick = {
+                        previousSubScreen = subScreen
+                        subScreen = SubScreen.Comment(id)
+                    },
                     isDownloaded = dlBooks.any { it.bookId == id },
                     isDownloading = dlProgress.values.any {
                         it.status == com.batsd.jmcomict.data.download.DownloadTaskStatus.DOWNLOADING
@@ -281,6 +314,10 @@ fun MainScreen(
                                 }
                             }
                         }
+                    },
+                    onRefresh = {
+                        bookViewModel.getBookDetail(id)
+                        bookViewModel.getComments(id)
                     }
                 )
                 }
@@ -362,7 +399,11 @@ fun MainScreen(
                 },
                 onShowDisclaimer = onShowDisclaimer,
                 onLineTestClick = { previousSubScreen = SubScreen.Settings; subScreen = SubScreen.LineTest },
-                onAboutClick = { previousSubScreen = SubScreen.Settings; subScreen = SubScreen.About }
+                onAboutClick = { previousSubScreen = SubScreen.Settings; subScreen = SubScreen.About },
+                onUpdateClick = { subScreen = SubScreen.Update },
+                autoCheckUpdate = updateViewModel.autoCheckEnabled,
+                onToggleAutoCheckUpdate = { updateViewModel.setAutoCheckEnabled(it) },
+                onCompatibilityClick = { subScreen = SubScreen.CompatibilitySettings }
             )
             is SubScreen.LineTest -> LineTestScreen(
                 currentApiUrlIndex = apiUrlIndex,
@@ -384,6 +425,30 @@ fun MainScreen(
             is SubScreen.About -> AboutScreen(
                 versionName = versionName,
                 onBackClick = { subScreen = SubScreen.Settings }
+            )
+            is SubScreen.Update -> UpdateScreen(
+                updateViewModel = updateViewModel,
+                currentVersion = versionName,
+                onBackClick = { subScreen = SubScreen.Settings }
+            )
+            is SubScreen.CompatibilitySettings -> CompatibilitySettingsScreen(
+                compatDownsample = prefs.getCompatImageDownsample(),
+                compatRGB565 = prefs.getCompatRGB565(),
+                compatCacheLimit = prefs.getCompatCacheLimit(),
+                onToggleCompatDownsample = { prefs.setCompatImageDownsample(it) },
+                onToggleCompatRGB565 = { prefs.setCompatRGB565(it) },
+                onToggleCompatCacheLimit = { prefs.setCompatCacheLimit(it) },
+                onBackClick = { subScreen = SubScreen.Settings }
+            )
+            is SubScreen.Comment -> CommentScreen(
+                comments = comments,
+                commentCount = commentCount,
+                isLoggedIn = user?.isLogin == true,
+                isPosting = false,
+                onBackClick = { subScreen = previousSubScreen.also { previousSubScreen = SubScreen.None } },
+                onLoadComments = { bookViewModel.getComments((screen as SubScreen.Comment).bookId) },
+                onLoadMoreComments = { page -> bookViewModel.getComments((screen as SubScreen.Comment).bookId, page.toString()) },
+                onPostComment = { text, _ -> bookViewModel.postComment((screen as SubScreen.Comment).bookId, text) }
             )
             is SubScreen.Downloads -> DownloadsScreen(
                 onBackClick = { subScreen = SubScreen.None },
@@ -531,7 +596,8 @@ fun MainScreen(
                         bookViewModel.getBookDetail(id)
                         previousSubScreen = SubScreen.None
                         subScreen = SubScreen.BookDetail(id)
-                    }
+                    },
+                    onRefresh = { if (searchQuery.isNotEmpty()) bookViewModel.searchBooks(searchQuery) }
                 )
                 MainTab.Favorites -> {
                     val favs by bookViewModel.favorites.collectAsState()
@@ -548,7 +614,8 @@ fun MainScreen(
                             bookViewModel.toggleFavorite(id)
                             bookViewModel.getFavorites()
                         },
-                        onLoadMore = { bookViewModel.loadMoreFavorites() }
+                        onLoadMore = { bookViewModel.loadMoreFavorites() },
+                        onRefresh = { bookViewModel.getFavorites() }
                     )
                 }
                 MainTab.Profile -> {
@@ -583,5 +650,53 @@ fun MainScreen(
     } // close SubScreen.None
     } // close when(screen)
     } // close AnimatedContent
+
+    // ===== 低内存设备提示弹窗 =====
+    if (showLowRamDialog) {
+        AlertDialog(
+            onDismissRequest = { showLowRamDialog = false },
+            icon = { Icon(Icons.Default.Memory, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("内存不足") },
+            text = {
+                Text("当前设备内存较低，浏览漫画图片可能导致闪退。\n\n建议前往 「设置 → 兼容设置」开启图片内存优化后再阅读。")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLowRamDialog = false
+                    bookViewModel.getEpisodeDetail(pendingReaderEpsId)
+                    previousSubScreen = subScreen
+                    subScreen = SubScreen.Reader(pendingReaderEpsId)
+                }) { Text("仍然进入") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showLowRamDialog = false
+                    subScreen = SubScreen.CompatibilitySettings
+                }) { Text("去设置") }
+            }
+        )
+    }
+
     } // close Box wrapper
+}
+
+/**
+ * 检测是否为低内存设备（总 RAM ≤ 2GB 或可用 ≤ 200MB）
+ */
+private fun checkLowRamDevice(context: android.content.Context): Boolean {
+    val am = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        ?: return false
+    val memInfo = android.app.ActivityManager.MemoryInfo()
+    am.getMemoryInfo(memInfo)
+    return memInfo.totalMem <= 1536L * 1024 * 1024
+            || memInfo.availMem <= 200L * 1024 * 1024
+}
+
+/**
+ * 检查是否已开启任一兼容优化
+ */
+private fun hasCompatEnabled(prefs: PreferencesManager): Boolean {
+    return prefs.getCompatImageDownsample()
+            || prefs.getCompatRGB565()
+            || prefs.getCompatCacheLimit()
 }

@@ -135,6 +135,21 @@ class PreferencesManager(context: Context) {
     fun getThemeMode(): Int = sharedPreferences.getInt("theme_mode", 0)
     fun setThemeMode(mode: Int) { sharedPreferences.edit().putInt("theme_mode", mode).apply() }
 
+    /** 版本更新自动检测开关 */
+    fun getAutoCheckUpdate(): Boolean = sharedPreferences.getBoolean("auto_check_update", true)
+    fun setAutoCheckUpdate(enabled: Boolean) { sharedPreferences.edit().putBoolean("auto_check_update", enabled).apply() }
+
+    // ===== 兼容设置 =====
+    /** 图片降采样 — 按屏幕宽度缩减分辨率，大幅降低内存占用 */
+    fun getCompatImageDownsample(): Boolean = sharedPreferences.getBoolean("compat_img_downsample", false)
+    fun setCompatImageDownsample(enabled: Boolean) { sharedPreferences.edit().putBoolean("compat_img_downsample", enabled).apply() }
+    /** RGB_565 颜色模式 — 每像素 2 字节替代 4 字节，内存减半 */
+    fun getCompatRGB565(): Boolean = sharedPreferences.getBoolean("compat_rgb565", false)
+    fun setCompatRGB565(enabled: Boolean) { sharedPreferences.edit().putBoolean("compat_rgb565", enabled).apply() }
+    /** 限制图片缓存 — 降低缓存最大值 */
+    fun getCompatCacheLimit(): Boolean = sharedPreferences.getBoolean("compat_cache_limit", false)
+    fun setCompatCacheLimit(enabled: Boolean) { sharedPreferences.edit().putBoolean("compat_cache_limit", enabled).apply() }
+
     /** 隐藏的历史记录 ID（本地删除） */
     fun hideHistoryItem(bookId: String) {
         val hidden = getHiddenHistoryItems().toMutableSet()

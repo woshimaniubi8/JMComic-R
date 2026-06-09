@@ -39,7 +39,11 @@ fun SettingsScreen(
     onLogoutClick: () -> Unit,
     onLineTestClick: (() -> Unit)? = null,
     onShowDisclaimer: (() -> Unit)? = null,
-    onAboutClick: (() -> Unit)? = null
+    onAboutClick: (() -> Unit)? = null,
+    onUpdateClick: (() -> Unit)? = null,
+    autoCheckUpdate: Boolean = true,
+    onToggleAutoCheckUpdate: (Boolean) -> Unit = {},
+    onCompatibilityClick: (() -> Unit)? = null
 ) {
     var showCdnDialog by remember { mutableStateOf(false) }
     var showImageCdnDialog by remember { mutableStateOf(false) }
@@ -161,6 +165,24 @@ fun SettingsScreen(
                 }
             }
 
+            item { Spacer(Modifier.height(8.dp)); InfoHeader(title = "兼容设置", icon = Icons.Default.Memory) }
+            item {
+                CommonCard(variant = CardVariant.Filled, onClick = { onCompatibilityClick?.invoke() }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Tune, null, Modifier.size(20.dp), tint = colorScheme.primary)
+                            Spacer(Modifier.width(12.dp))
+                            Text("兼容设置", style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
+                        }
+                        Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = colorScheme.onSurfaceVariant.opacity38)
+                    }
+                }
+            }
+
             if (isLoggedIn) {
                 item { Spacer(Modifier.height(8.dp)); InfoHeader(title = "账户", icon = Icons.Default.Person) }
                 item {
@@ -177,6 +199,23 @@ fun SettingsScreen(
                 }
             }
             item { Spacer(Modifier.height(8.dp)); InfoHeader(title = "更多", icon = Icons.Default.Info) }
+            // 版本更新
+            item {
+                CommonCard(variant = CardVariant.Filled, onClick = { onUpdateClick?.invoke() }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.SystemUpdate, null, Modifier.size(20.dp), tint = colorScheme.primary)
+                            Spacer(Modifier.width(12.dp))
+                            Text("版本更新", style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
+                        }
+                        Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = colorScheme.onSurfaceVariant.opacity38)
+                    }
+                }
+            }
             item {
                 CommonCard(variant = CardVariant.Filled, onClick = {
                     if (onShowDisclaimer != null) {

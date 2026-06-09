@@ -30,7 +30,7 @@ android {
     // }
     defaultConfig {
         applicationId "com.batsd.jmcomict"
-        minSdk 24
+        minSdk 21
         targetSdk 36
         versionCode 4
         versionName "1.3"

@@ -43,7 +43,8 @@ fun ReaderScreen(
     onPreviousPage: () -> Unit,
     onNextPage: () -> Unit,
     onPageSelect: (Int) -> Unit,
-    localImagePaths: List<String> = emptyList()
+    localImagePaths: List<String> = emptyList(),
+    lowMemory: Boolean = false
 ) {
     var showBar by remember { mutableStateOf(true) }
     val totalPages = episode?.pages ?: 0
@@ -193,7 +194,8 @@ fun ReaderScreen(
                             DescrambledImage(
                                 imageUrl = url,
                                 scrambleId = scrambleId,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                lowMemory = lowMemory
                             )
                         }
                     }

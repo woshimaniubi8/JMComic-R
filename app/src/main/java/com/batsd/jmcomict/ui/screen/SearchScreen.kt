@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import com.batsd.jmcomict.data.model.BookItem
 import com.batsd.jmcomict.ui.components.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 
 /**
  * 搜索界面 — FlClash 搜索体验
@@ -35,7 +36,8 @@ fun SearchScreen(
     onSearchClick: (String) -> Unit,
     onBookClick: (String) -> Unit,
     onClearHistory: () -> Unit = {},
-    initialQuery: String = ""
+    initialQuery: String = "",
+    onRefresh: () -> Unit = {}
 ) {
     var searchQuery by remember(initialQuery) { mutableStateOf(initialQuery) }
     // 用户手动输入后清除 initialQuery 影响
@@ -58,11 +60,12 @@ fun SearchScreen(
     Scaffold(
         containerColor = colorScheme.background
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = padding.calculateTopPadding())
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())
         ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             // 搜索栏区域
             Surface(
                 color = colorScheme.surface,
@@ -193,5 +196,6 @@ fun SearchScreen(
                 }
             }
         }
+    }
     }
 }
