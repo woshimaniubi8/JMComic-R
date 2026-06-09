@@ -11,7 +11,8 @@
 - - (v1.4+) :**Android 5.0**
 - 目标安卓版本: **Android 16**
 
-预览图:
+**预览图:**
+
 <img height="auto" width="50%" src="/images/Screenshot_20260609_174451.png" />
 <img height="auto" width="50%" src="/images/Screenshot_20260609_174507.png" />
 <img height="auto" width="50%" src="/images/Screenshot_20260609_174525.png" />
