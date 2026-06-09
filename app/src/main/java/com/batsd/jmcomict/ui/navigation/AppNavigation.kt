@@ -194,6 +194,7 @@ fun MainScreen(
                 (initialState is SubScreen.LineTest && targetState is SubScreen.Settings) ||
                 (initialState is SubScreen.About && targetState is SubScreen.Settings) ||
                 (initialState is SubScreen.CompatibilitySettings && targetState is SubScreen.Settings) ||
+                (initialState is SubScreen.Update && targetState is SubScreen.Settings) ||
                 (initialState is SubScreen.Downloads) ||
                 (initialState is SubScreen.Reader)
             if (isGoingBack) {
