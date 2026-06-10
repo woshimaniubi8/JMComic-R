@@ -27,6 +27,7 @@ object ApiClientFactory {
 
     private var apiService: JMComicApiService? = null
     private var okHttpClient: OkHttpClient? = null
+    private var webOkHttpClient: OkHttpClient? = null
     @Volatile
     private var appContext: Context? = null
 
@@ -109,6 +110,7 @@ object ApiClientFactory {
 
     private val cookieStore = ConcurrentHashMap<String, MutableList<Cookie>>()
 
+    @Synchronized
     fun getInstance(context: Context): JMComicApiService {
         // 如果 baseUrl 已变更（切换分流后），重建 Retrofit
         if (apiService == null || currentBaseUrl != lastBaseUrl) {
@@ -119,6 +121,7 @@ object ApiClientFactory {
     }
 
     /** 获取共享的 OkHttpClient (可用于 Coil 等图片加载器) */
+    @Synchronized
     fun getOkHttpClient(context: Context): OkHttpClient {
         if (okHttpClient == null) {
             okHttpClient = createOkHttpClient(context)
@@ -127,9 +130,11 @@ object ApiClientFactory {
     }
 
     /** 获取 Web AJAX 请求用的 OkHttpClient（共享 CookieJar，不加 Auth 拦截器） */
+    @Synchronized
     fun getOkHttpClientForWeb(): OkHttpClient {
         // Web 请求不需要移动端 Token 认证，但需要共享 Cookie（AVS）
-        return OkHttpClient.Builder()
+        if (webOkHttpClient == null) {
+            webOkHttpClient = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .cookieJar(object : CookieJar {
@@ -147,14 +152,16 @@ object ApiClientFactory {
                     }
                 }
             })
-            .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
+            .addInterceptor(createLoggingInterceptor())
             .build()
+        }
+        return webOkHttpClient!!
     }
 
     private fun createRetrofit(context: Context): Retrofit {
         return Retrofit.Builder()
             .baseUrl(currentBaseUrl)
-            .client(createOkHttpClient(context))
+            .client(getOkHttpClient(context))
             .addConverterFactory(createJsonConverter().asConverterFactory("application/json".toMediaType()))
             .build()
     }
@@ -252,7 +259,7 @@ object ApiClientFactory {
 
     private fun createLoggingInterceptor(): HttpLoggingInterceptor {
         val logging = HttpLoggingInterceptor()
-        logging.level = HttpLoggingInterceptor.Level.BODY
+        logging.level = HttpLoggingInterceptor.Level.NONE
         return logging
     }
 

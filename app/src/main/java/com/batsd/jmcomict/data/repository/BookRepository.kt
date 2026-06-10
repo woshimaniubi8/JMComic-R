@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 
 class BookRepository {
     private val apiService: JMComicApiService get() = ApiClientFactory.getApiService()
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
     suspend fun getLatest(page: String = "0"): Result<List<BookItem>> {
         return apiCall({ apiService.getLatest(page) }) { it.decryptAndParseList<BookItem>() }
@@ -78,8 +79,7 @@ class BookRepository {
                 val decrypted = response.decryptDataField()
                 if (!decrypted.isNullOrEmpty()) {
                     try {
-                        val obj = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                            .decodeFromString<kotlinx.serialization.json.JsonObject>(decrypted)
+                        val obj = json.decodeFromString<kotlinx.serialization.json.JsonObject>(decrypted)
                         val msg = obj["msg"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
                             ?: obj["message"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
                         if (!msg.isNullOrEmpty()) return Result.success(msg)
@@ -113,9 +113,11 @@ class BookRepository {
                 .header("X-Requested-With", "XMLHttpRequest")
                 .header("Accept", "application/json, text/javascript, */*; q=0.01")
                 .build()
-            val response = withContext(Dispatchers.IO) { client.newCall(request).execute() }
-            val raw = response.body?.string() ?: ""
-            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+            val raw = withContext(Dispatchers.IO) {
+                client.newCall(request).execute().use { response ->
+                    response.body?.string() ?: ""
+                }
+            }
             val obj = json.decodeFromString<kotlinx.serialization.json.JsonObject>(raw)
             val msg = obj["msg"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
             if (!msg.isNullOrEmpty()) Result.success(msg)
@@ -158,8 +160,7 @@ class BookRepository {
             val decrypted = response.decryptDataField()
             if (!decrypted.isNullOrEmpty()) {
                 try {
-                    val obj = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                        .decodeFromString<kotlinx.serialization.json.JsonObject>(decrypted)
+                    val obj = json.decodeFromString<kotlinx.serialization.json.JsonObject>(decrypted)
                     val msg = obj["msg"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
                         ?: obj["message"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
                     if (!msg.isNullOrEmpty()) return Result.success(msg)

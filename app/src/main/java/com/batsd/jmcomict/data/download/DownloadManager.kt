@@ -129,7 +129,7 @@ object DownloadManager {
     private fun saveBookDetailJson(bookId: String, detail: BookDetail) {
         try {
             val detailFile = File(bookDir(bookId), "detail.json")
-            detailFile.writeText(Json { ignoreUnknownKeys = true; prettyPrint = true }.encodeToString(detail))
+            detailFile.writeText(json.encodeToString(detail))
         } catch (e: Exception) {
             android.util.Log.e("DownloadManager", "保存BookDetail失败", e)
         }
@@ -140,7 +140,7 @@ object DownloadManager {
         return try {
             val detailFile = File(bookDir(bookId), "detail.json")
             if (detailFile.exists()) {
-                Json { ignoreUnknownKeys = true }.decodeFromString<BookDetail>(detailFile.readText())
+                json.decodeFromString<BookDetail>(detailFile.readText())
             } else null
         } catch (e: Exception) {
             android.util.Log.e("DownloadManager", "加载BookDetail失败", e)
@@ -167,12 +167,8 @@ object DownloadManager {
         loadIndex()
     }
 
-    private fun getOkHttpClient(): okhttp3.OkHttpClient {
-        return okhttp3.OkHttpClient.Builder()
-            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .build()
-    }
+    private fun getOkHttpClient(): okhttp3.OkHttpClient =
+        appContext?.let { ApiClientFactory.getOkHttpClient(it) } ?: okhttp3.OkHttpClient()
 
     /** 获取某本书的下载目录 */
     private fun bookDir(bookId: String): File = File(baseDir, bookId).also { it.mkdirs() }
@@ -261,18 +257,19 @@ object DownloadManager {
                     if (!isActive) break
                     try {
                         val request = Request.Builder().url(url).build()
-                        val response = client.newCall(request).execute()
-                        if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
-                        val bytes = response.body?.bytes() ?: throw Exception("空响应体")
-                        response.close()
+                        val bytes = client.newCall(request).execute().use { response ->
+                            if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
+                            response.body?.bytes() ?: throw Exception("空响应体")
+                        }
 
                         // 解密图片
                         val opts = BitmapFactory.Options().apply {
                             inPreferredConfig = Bitmap.Config.ARGB_8888
                         }
                         val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                            ?: throw Exception("图片解码失败")
                         val num = ImageDescrambler.getNumFromUrl(scrambleId, url)
-                        val descrambled = ImageDescrambler.descramble(src ?: continue, num)
+                        val descrambled = ImageDescrambler.descramble(src, num)
 
                         // 保存为 PNG（无损）
                         val filename = "page_${(index + 1).toString().padStart(5, '0')}.png"
@@ -280,8 +277,8 @@ object DownloadManager {
                         FileOutputStream(file).use { out ->
                             descrambled.compress(Bitmap.CompressFormat.PNG, 100, out)
                         }
-                        descrambled.recycle()
-                        src?.recycle()
+                        if (descrambled !== src) descrambled.recycle()
+                        src.recycle()
                         localPaths.add(file.absolutePath)
 
                         _downloadProgress.value = _downloadProgress.value + (epsId to
@@ -353,9 +350,10 @@ object DownloadManager {
         try {
             val coverUrl = ApiClientFactory.fullImageUrl(detail.cover)
             val request = Request.Builder().url(coverUrl).build()
-            val response = getOkHttpClient().newCall(request).execute()
-            val bytes = response.body?.bytes() ?: return ""
-            response.close()
+            val bytes = getOkHttpClient().newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return ""
+                response.body?.bytes() ?: return ""
+            }
             val coverFile = File(bookDir(detail.id), "cover.jpg")
             coverFile.writeBytes(bytes)
             return coverFile.absolutePath

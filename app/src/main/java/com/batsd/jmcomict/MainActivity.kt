@@ -81,10 +81,12 @@ class MainActivity : ComponentActivity() {
                 2 -> true   // 深色
                 else -> isSystemInDarkTheme()  // 0=跟随系统
             }
-            val imageLoader = ImageLoader.Builder(this@MainActivity)
-                .okHttpClient { ApiClientFactory.getOkHttpClient(this@MainActivity) }
-                .crossfade(true)
-                .build()
+            val imageLoader = remember {
+                ImageLoader.Builder(this@MainActivity)
+                    .okHttpClient { ApiClientFactory.getOkHttpClient(this@MainActivity) }
+                    .crossfade(true)
+                    .build()
+            }
             CompositionLocalProvider(LocalImageLoader provides imageLoader) {
                 OpenJMTheme(darkTheme = isDarkTheme) {
                     MaterialToastHost {

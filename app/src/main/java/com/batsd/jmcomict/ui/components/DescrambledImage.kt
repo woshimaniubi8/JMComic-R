@@ -2,6 +2,7 @@
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,7 +20,6 @@ import com.batsd.jmcomict.utils.ImageDescrambler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
-import java.util.Collections
 
 /**
  * 自定义 descramble 图片加载组件 — 绕过 Coil，直接下载+解码+解密。
@@ -32,44 +32,48 @@ fun DescrambledImage(
     modifier: Modifier = Modifier,
     lowMemory: Boolean = false
 ) {
-    var bitmap by remember(imageUrl, scrambleId) { mutableStateOf<Bitmap?>(ImageCache.get(imageUrl)) }
+    val cacheKey = remember(imageUrl, scrambleId, lowMemory) { "$imageUrl#$scrambleId#$lowMemory" }
+    var bitmap by remember(cacheKey) { mutableStateOf<Bitmap?>(ImageCache.get(cacheKey)) }
     var isLoading by remember(imageUrl, scrambleId) { mutableStateOf(bitmap == null) }
     var error by remember(imageUrl, scrambleId) { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val client = remember { ApiClientFactory.getOkHttpClient(context) }
 
-    LaunchedEffect(imageUrl, scrambleId) {
+    LaunchedEffect(cacheKey) {
         if (bitmap != null) return@LaunchedEffect
         isLoading = true
         try {
             val result = withContext(Dispatchers.IO) {
+                val preferredConfig = if (lowMemory) Bitmap.Config.RGB_565 else Bitmap.Config.ARGB_8888
                 if (imageUrl.startsWith("file://") || imageUrl.startsWith("/")) {
                     val path = imageUrl.removePrefix("file://")
                     val opts = BitmapFactory.Options().apply {
-                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                        inPreferredConfig = preferredConfig
                     }
                     val localBmp = BitmapFactory.decodeFile(path, opts)
                         ?: throw Exception("本地文件解码失败: $path")
                     localBmp  // 本地已解密图片，直接返回
                 } else {
                     val request = Request.Builder().url(imageUrl).build()
-                    val response = client.newCall(request).execute()
-                    if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
-                    val bytes = response.body?.bytes() ?: throw Exception("Empty body")
-                    response.close()
-                    val opts = BitmapFactory.Options().apply {
-                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
+                        val bytes = response.body?.bytes() ?: throw Exception("Empty body")
+                        val opts = BitmapFactory.Options().apply {
+                            inPreferredConfig = preferredConfig
+                        }
+                        val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                            ?: throw Exception("Decode failed")
+                        val num = ImageDescrambler.getNumFromUrl(scrambleId, imageUrl)
+                        val decoded = ImageDescrambler.descramble(src, num)
+                        if (decoded !== src) src.recycle()
+                        decoded
                     }
-                    val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-                        ?: throw Exception("Decode failed")
-                    val num = ImageDescrambler.getNumFromUrl(scrambleId, imageUrl)
-                    ImageDescrambler.descramble(src, num)
                 }
             }
             // 低内存后处理（不解码路径，仅在原始 result 为 Bitmap 时触发）
-            val finalResult = if (lowMemory && result is android.graphics.Bitmap) {
-                var bmp = result as android.graphics.Bitmap
+            val finalResult = if (lowMemory) {
+                var bmp = result
                 val sw = context.resources.displayMetrics.widthPixels
                 if (bmp.width > sw) {
                     val ratio = bmp.width.toFloat() / sw
@@ -87,7 +91,7 @@ fun DescrambledImage(
                 bmp
             } else result
             bitmap = finalResult
-            if (finalResult is android.graphics.Bitmap) ImageCache.put(imageUrl, finalResult as android.graphics.Bitmap)
+            ImageCache.put(cacheKey, finalResult)
             isLoading = false
         } catch (e: Exception) {
             android.util.Log.e("DescrambledImage", "Failed: $imageUrl", e)
@@ -113,19 +117,19 @@ fun DescrambledImage(
 }
 
 /**
- * 简单的内存 LRU 缓存（最多缓存 30 张 descrambled 图片）
+ * 按像素内存限制的 LRU，避免阅读器一次缓存过多全尺寸页面导致 OOM。
  */
 private object ImageCache {
-    private const val MAX_SIZE = 30
-    private val cache = Collections.synchronizedMap(object : LinkedHashMap<String, Bitmap>(MAX_SIZE, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean {
-            return size > MAX_SIZE
-        }
-    })
+    private val maxBytes = (Runtime.getRuntime().maxMemory() / 8).coerceAtMost(32L * 1024L * 1024L).toInt()
+    private val cache = object : LruCache<String, Bitmap>(maxBytes) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+    }
 
-    fun get(url: String): Bitmap? = cache[url]
+    @Synchronized
+    fun get(url: String): Bitmap? = cache.get(url)
 
+    @Synchronized
     fun put(url: String, bitmap: Bitmap) {
-        cache[url] = bitmap
+        cache.put(url, bitmap)
     }
 }
