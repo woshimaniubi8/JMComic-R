@@ -27,23 +27,25 @@ fun CommentScreen(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     var commentsLoading by remember { mutableStateOf(true) }
-    var hasLoaded by remember { mutableStateOf(false) }
+    var loadStarted by remember { mutableStateOf(false) }
     var commentPage by remember { mutableIntStateOf(0) }
 
     // 初始加载
     LaunchedEffect(Unit) {
+        commentsLoading = true
+        loadStarted = true
         onLoadComments()
     }
-    // 监听 comments 变化（StateFlow 不发送相同引用，用单独标志检测加载完成）
+    // 首次进入时 comments 通常是初始空列表，不应立刻显示“暂无评论”。
     LaunchedEffect(comments) {
-        hasLoaded = true
-        commentsLoading = false
+        if (loadStarted && comments.isNotEmpty()) {
+            commentsLoading = false
+        }
     }
     // 超时保护：5秒后强制停止加载
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(5000)
         commentsLoading = false
-        hasLoaded = true
     }
 
     Scaffold(

@@ -23,14 +23,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.batsd.jmcomict.data.download.DownloadManager
+import com.batsd.jmcomict.data.download.DownloadTaskStatus
 import com.batsd.jmcomict.data.download.DownloadedBook
-import com.batsd.jmcomict.data.download.DownloadedChapter
-import com.batsd.jmcomict.ui.components.CommonCard
-import com.batsd.jmcomict.ui.components.CardVariant
 import com.batsd.jmcomict.ui.components.InfoHeader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +37,7 @@ fun DownloadsScreen(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val downloadedBooks by DownloadManager.downloadedBooks.collectAsState()
+    val downloadProgress by DownloadManager.downloadProgress.collectAsState()
     var showDeleteConfirm by remember { mutableStateOf<DownloadedBook?>(null) }
 
     Scaffold(
@@ -92,14 +90,19 @@ fun DownloadsScreen(
             ) {
                 item {
                     InfoHeader(
-                        title = "已下载 ${downloadedBooks.size} 本",
+                        title = "本地任务 ${downloadedBooks.size} 本",
                         icon = Icons.Default.CloudDownload
                     )
                 }
                 items(downloadedBooks, key = { it.bookId }) { book ->
+                    val isDownloading = downloadProgress.values.any {
+                        it.bookId == book.bookId && it.status == DownloadTaskStatus.DOWNLOADING
+                    }
                     DownloadedBookCard(
                         book = book,
+                        isDownloading = isDownloading,
                         onClick = { onBookClick(book.bookId) },
+                        onResume = { DownloadManager.resumeBookDownload(book.bookId) },
                         onDelete = { showDeleteConfirm = book }
                     )
                 }
@@ -151,11 +154,21 @@ fun DownloadsScreen(
 @Composable
 private fun DownloadedBookCard(
     book: DownloadedBook,
+    isDownloading: Boolean,
     onClick: () -> Unit,
+    onResume: () -> Unit,
     onDelete: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     var coverBitmap by remember(book.coverLocalPath) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    val hasIncomplete = book.chapters.any {
+        it.status != DownloadTaskStatus.COMPLETED ||
+            (it.totalPages > 0 && it.pageCount < it.totalPages)
+    }
+    val failedCount = book.chapters.count { it.status == DownloadTaskStatus.FAILED }
+    val completedCount = book.chapters.count { it.status == DownloadTaskStatus.COMPLETED }
+    val (donePages, totalPages) = DownloadManager.getBookProgress(book.bookId)
+    val progress = if (totalPages > 0) donePages.toFloat() / totalPages else 0f
 
     LaunchedEffect(book.coverLocalPath) {
         if (book.coverLocalPath.isNotEmpty()) {
@@ -218,14 +231,53 @@ private fun DownloadedBookCard(
                 }
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Download, null, Modifier.size(14.dp),
+                    Icon(
+                        when {
+                            isDownloading -> Icons.Default.Downloading
+                            hasIncomplete -> Icons.Default.ErrorOutline
+                            else -> Icons.Default.DownloadDone
+                        },
+                        null,
+                        Modifier.size(14.dp),
                         tint = colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        "${book.chapters.size} 章 · ${book.chapters.sumOf { it.pageCount }} 页",
+                        "${book.chapters.size} 章 · $donePages/$totalPages 页",
                         style = MaterialTheme.typography.labelSmall,
                         color = colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
+                }
+                if (totalPages > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(5.dp),
+                        color = if (hasIncomplete && !isDownloading) colorScheme.error else colorScheme.primary,
+                        trackColor = colorScheme.surfaceContainerHighest
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    when {
+                        isDownloading -> "下载中"
+                        hasIncomplete -> "未完成 ${failedCount} 章，可继续下载"
+                        else -> "已完成 ${completedCount} 章"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (hasIncomplete && !isDownloading) colorScheme.error else colorScheme.onSurfaceVariant
+                )
+                if (hasIncomplete && !isDownloading) {
+                    Spacer(Modifier.height(8.dp))
+                    FilledTonalButton(
+                        onClick = onResume,
+                        modifier = Modifier.height(34.dp),
+                        shape = MaterialTheme.shapes.small,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("继续下载", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
             // 删除按钮

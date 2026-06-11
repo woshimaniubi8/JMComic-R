@@ -282,19 +282,18 @@ fun CommonChip(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     onClick: (() -> Unit)? = null,
-    leadingIcon: ImageVector? = null
+    leadingIcon: ImageVector? = null,
+    compactTouchTarget: Boolean = false
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val surfaceModifier = if (compactTouchTarget && onClick != null) {
+        modifier.clickable(onClick = onClick)
+    } else {
+        modifier
+    }
 
     // 统一使用 Surface 风格，保持标签外观一致（无论是否可点击）
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = if (selected) colorScheme.secondaryContainer else colorScheme.surfaceContainerHigh,
-        border = androidx.compose.foundation.BorderStroke(1.dp,
-            if (selected) colorScheme.primary.opacity60 else colorScheme.outlineVariant),
-        onClick = onClick ?: {}
-    ) {
+    val content: @Composable () -> Unit = {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -306,6 +305,29 @@ fun CommonChip(
             Text(label,
                 style = MaterialTheme.typography.labelMedium,
                 color = if (selected) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant)
+        }
+    }
+
+    if (compactTouchTarget) {
+        Surface(
+            modifier = surfaceModifier,
+            shape = MaterialTheme.shapes.small,
+            color = if (selected) colorScheme.secondaryContainer else colorScheme.surfaceContainerHigh,
+            border = androidx.compose.foundation.BorderStroke(1.dp,
+                if (selected) colorScheme.primary.opacity60 else colorScheme.outlineVariant)
+        ) {
+            content()
+        }
+    } else {
+        Surface(
+            modifier = modifier,
+            shape = MaterialTheme.shapes.small,
+            color = if (selected) colorScheme.secondaryContainer else colorScheme.surfaceContainerHigh,
+            border = androidx.compose.foundation.BorderStroke(1.dp,
+                if (selected) colorScheme.primary.opacity60 else colorScheme.outlineVariant),
+            onClick = onClick ?: {}
+        ) {
+            content()
         }
     }
 }

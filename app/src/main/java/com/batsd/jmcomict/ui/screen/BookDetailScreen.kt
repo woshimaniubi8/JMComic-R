@@ -82,7 +82,15 @@ fun BookDetailScreen(
     // 评论加载完成后重置加载状态
     LaunchedEffect(comments) {
         if (!showComments) return@LaunchedEffect
-        commentsLoading = false
+        if (comments.isNotEmpty()) commentsLoading = false
+    }
+
+    LaunchedEffect(showComments) {
+        if (showComments) {
+            commentsLoading = true
+            kotlinx.coroutines.delay(5000)
+            commentsLoading = false
+        }
     }
 
     // 评论加载失败也重置（通过 isLoading 变化检测）
@@ -255,11 +263,15 @@ fun BookDetailScreen(
                             InfoHeader(title = "标签", icon = Icons.Default.Label)
                             FlowRow(
                                 modifier = Modifier.padding(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 detail.tags.forEach { tag ->
-                                    CommonChip(label = tag, onClick = { onSearchTagClick(tag) })
+                                    CommonChip(
+                                        label = tag,
+                                        onClick = { onSearchTagClick(tag) },
+                                        compactTouchTarget = true
+                                    )
                                 }
                             }
                         }
@@ -271,11 +283,15 @@ fun BookDetailScreen(
                             InfoHeader(title = "出场角色", icon = Icons.Default.Person)
                             FlowRow(
                                 modifier = Modifier.padding(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 detail.actors.forEach { actor ->
-                                    CommonChip(label = actor, onClick = { onSearchTagClick(actor) })
+                                    CommonChip(
+                                        label = actor,
+                                        onClick = { onSearchTagClick(actor) },
+                                        compactTouchTarget = true
+                                    )
                                 }
                             }
                         }
@@ -381,6 +397,7 @@ fun BookDetailScreen(
                             // 评论
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 IconButton(onClick = {
+                                    commentsLoading = true
                                     onLoadComments()
                                     onCommentClick()
                                 }, modifier = Modifier.size(48.dp)) {
@@ -428,32 +445,6 @@ fun BookDetailScreen(
                                     if (isDownloading) "下载中" else if (isDownloaded) if (hasUpdate) "有更新" else "已下载" else "下载",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (hasUpdate) colorScheme.error else colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-
-                    // ===== 下载进度条 =====
-                    if (isDownloading) {
-                        item {
-                            val (done, total) = downloadProgress
-                            val progress = if (total > 0) done.toFloat() / total else 0f
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Spacer(Modifier.height(4.dp))
-                                LinearProgressIndicator(
-                                    progress = { progress },
-                                    modifier = Modifier.fillMaxWidth().height(6.dp),
-                                    color = colorScheme.primary,
-                                    trackColor = colorScheme.surfaceContainerHighest,
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    "下载中 $done/$total 页",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
                             }
                         }

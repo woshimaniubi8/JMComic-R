@@ -1,13 +1,17 @@
-﻿package com.batsd.jmcomict.ui.components
+package com.batsd.jmcomict.ui.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,8 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import kotlinx.coroutines.launch
 import com.batsd.jmcomict.data.model.CommentInfo
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,7 +36,6 @@ fun CommentSheet(
 ) {
     var inputText by remember { mutableStateOf("") }
     var isSpoiler by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val toast = LocalToast.current
     val topComments = comments.filter { it.parentCid == "0" || it.parentCid.isEmpty() }
@@ -41,8 +44,6 @@ fun CommentSheet(
     val effectiveHasMore = hasMore && topComments.size < totalCount
 
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 0.dp).fillMaxHeight()) {
-
-        // 中间区域填充剩余空间，确保底部输入框固定在底部
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (isLoading && comments.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -66,14 +67,28 @@ fun CommentSheet(
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(value = inputText, onValueChange = { inputText = it },
-                placeholder = { Text("写评论...") }, modifier = Modifier.weight(1f), maxLines = 3)
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = { inputText = it },
+                placeholder = { Text("写评论...") },
+                modifier = Modifier.weight(1f),
+                maxLines = 3
+            )
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 4.dp)) {
-                IconButton(onClick = {
-                    if (inputText.isBlank()) { scope.launch { toast("请输入内容") }; return@IconButton }
-                    if (isPosting) return@IconButton
-                    onPostComment(inputText, isSpoiler); inputText = ""; isSpoiler = false
-                }, enabled = inputText.isNotBlank() && !isPosting, modifier = Modifier.size(40.dp)) {
+                IconButton(
+                    onClick = {
+                        if (inputText.isBlank()) {
+                            scope.launch { toast("请输入内容") }
+                            return@IconButton
+                        }
+                        if (isPosting) return@IconButton
+                        onPostComment(inputText, isSpoiler)
+                        inputText = ""
+                        isSpoiler = false
+                    },
+                    enabled = inputText.isNotBlank() && !isPosting,
+                    modifier = Modifier.size(40.dp)
+                ) {
                     if (isPosting) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
@@ -83,44 +98,115 @@ fun CommentSheet(
                         Icon(Icons.Default.Send, "发送", Modifier.size(20.dp))
                     }
                 }
-                Text("剧透", style = MaterialTheme.typography.labelSmall,
+                Text(
+                    "剧透",
+                    style = MaterialTheme.typography.labelSmall,
                     color = if (isSpoiler) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable { isSpoiler = !isSpoiler }.padding(vertical = 2.dp))
+                    modifier = Modifier.clickable { isSpoiler = !isSpoiler }.padding(vertical = 2.dp)
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CommentItem(comment: CommentInfo, subReplies: List<CommentInfo>) {
     Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (comment.avatarUrl.isNotEmpty())
-                    AsyncImage(model = com.batsd.jmcomict.data.api.ApiClientFactory.fullImageUrl(comment.avatarUrl),
-                        null, Modifier.size(32.dp).padding(end = 8.dp))
-                Column {
-                    Text(comment.displayName, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                    if (comment.levelName.isNotEmpty()) Text(comment.levelName, style = MaterialTheme.typography.labelSmall)
+        CommentCopyMenu(comment = comment) {
+            Column(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (comment.avatarUrl.isNotEmpty()) {
+                            AsyncImage(
+                                model = com.batsd.jmcomict.data.api.ApiClientFactory.fullImageUrl(comment.avatarUrl),
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp).padding(end = 8.dp)
+                            )
+                        }
+                        Column {
+                            Text(comment.displayName, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                            if (comment.levelName.isNotEmpty()) Text(comment.levelName, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(comment.addtime, style = MaterialTheme.typography.labelSmall)
+                        if (comment.likes != "0") Text("❤ ${comment.likes}", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                if (comment.contentText.isNotEmpty()) {
+                    Text(comment.contentText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp, start = 4.dp))
+                }
+                Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp), horizontalArrangement = Arrangement.End) {
+                    if (comment.name.isNotEmpty()) {
+                        Text(
+                            comment.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.opacity60
+                        )
+                    }
                 }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(comment.addtime, style = MaterialTheme.typography.labelSmall)
-                if (comment.likes != "0") Text("❤ ${comment.likes}", style = MaterialTheme.typography.labelSmall)
-            }
-        }
-        if (comment.contentText.isNotEmpty())
-            Text(comment.contentText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp, start = 4.dp))
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp), horizontalArrangement = Arrangement.End) {
-            if (comment.name.isNotEmpty())
-                Text(comment.name, style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.opacity60)
         }
         subReplies.forEach { r ->
-            Text("↳ ${r.displayName}: ${r.contentText}", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 20.dp, top = 4.dp), maxLines = 3)
+            CommentCopyMenu(
+                comment = r,
+                modifier = Modifier.padding(start = 20.dp, top = 4.dp)
+            ) {
+                Text(
+                    "↳ ${r.displayName}: ${r.contentText}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3
+                )
+            }
         }
         HorizontalDivider(Modifier.padding(top = 8.dp))
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CommentCopyMenu(
+    comment: CommentInfo,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    fun copyComment(label: String, text: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+        Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+        expanded = false
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { expanded = true }
+            )
+    ) {
+        content()
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("复制评论内容") },
+                onClick = { copyComment("评论内容", comment.contentText) }
+            )
+            DropdownMenuItem(
+                text = { Text("复制评论者") },
+                onClick = { copyComment("评论者", comment.displayName) }
+            )
+            DropdownMenuItem(
+                text = { Text("复制完整评论") },
+                onClick = { copyComment("完整评论", "@${comment.displayName}:${comment.contentText}") }
+            )
+        }
     }
 }

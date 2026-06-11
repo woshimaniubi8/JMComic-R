@@ -5,6 +5,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -79,7 +81,7 @@ fun MainScreen(
     var selectedTab by remember { mutableStateOf(MainTab.Home) }
     var subScreen by remember { mutableStateOf<SubScreen>(SubScreen.None) }
     var previousSubScreen by remember { mutableStateOf<SubScreen>(SubScreen.None) }
-    var searchHistory by remember { mutableStateOf(emptyList<String>()) }
+    var searchHistory by remember { mutableStateOf(prefs.getSearchHistory()) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedSection by remember { mutableIntStateOf(0) }
     // 同步恢复 CDN 分流索引（API 和图片 CDN 独立恢复）
@@ -262,7 +264,7 @@ fun MainScreen(
                     },
                     isDownloaded = dlBooks.any { it.bookId == id },
                     isDownloading = dlProgress.values.any {
-                        it.status == com.batsd.jmcomict.data.download.DownloadTaskStatus.DOWNLOADING
+                        it.bookId == id && it.status == com.batsd.jmcomict.data.download.DownloadTaskStatus.DOWNLOADING
                     },
                     downloadProgress = com.batsd.jmcomict.data.download.DownloadManager.getBookProgress(id),
                     onSearchTagClick = { query ->
@@ -276,44 +278,14 @@ fun MainScreen(
                     },
                     hasUpdate = detail?.let { comicDetail ->
                         if (dlBooks.any { it.bookId == id }) {
-                            val localEpsIds = com.batsd.jmcomict.data.download.DownloadManager.getLocalEpsIds(id)
                             val serverEpsIds = comicDetail.getEffectiveSeries().map { it.epsId }
-                            serverEpsIds.any { it !in localEpsIds }
+                            com.batsd.jmcomict.data.download.DownloadManager.hasUpdates(id, serverEpsIds)
                         } else false
                     } ?: false,
                     onDownloadClick = {
                         android.util.Log.d("AppNav", "Download book: $id")
                         if (detail != null) {
-                            // 立即显示加载动画
-                            val firstEpsId = detail.getEffectiveSeries().firstOrNull()?.epsId ?: id
-                            com.batsd.jmcomict.data.download.DownloadManager.markDownloading(firstEpsId, detail.title)
-                            kotlinx.coroutines.MainScope().launch {
-                                val repo = com.batsd.jmcomict.data.repository.BookRepository()
-                                val episodes = detail.getEffectiveSeries()
-                                val imgBaseUrl = com.batsd.jmcomict.data.api.ApiClientFactory.getImageBaseUrl()
-                                episodes.forEach { eps ->
-                                    var scrambleId = 220980
-                                    var imageUrls = listOf<String>()
-                                    repo.getChapterViewTemplate(eps.epsId).onSuccess { s ->
-                                        scrambleId = s.scrambleId.toIntOrNull() ?: 220980
-                                    }
-                                    repo.getEpisodeDetail(eps.epsId).onSuccess { ep ->
-                                        if (ep.images.isNotEmpty()) {
-                                            imageUrls = ep.images.map { img ->
-                                                "$imgBaseUrl/media/photos/${eps.epsId}/$img"
-                                            }
-                                        }
-                                    }
-                                    val fullEps = eps.copy().apply {
-                                        pictureUrl = imageUrls
-                                        pictureName = imageUrls.map { it.substringAfterLast("/") }
-                                        pages = imageUrls.size
-                                    }
-                                    com.batsd.jmcomict.data.download.DownloadManager.downloadChapter(
-                                        detail, fullEps, scrambleId, this
-                                    )
-                                }
-                            }
+                            com.batsd.jmcomict.data.download.DownloadManager.downloadBook(detail)
                         }
                     },
                     onRefresh = {
@@ -472,6 +444,12 @@ fun MainScreen(
             )
             is SubScreen.None -> {
     val colorScheme = MaterialTheme.colorScheme
+    val tabOrder = listOf(MainTab.Home, MainTab.Search, MainTab.Favorites, MainTab.Profile)
+    val pagerState = rememberPagerState(
+        pageCount = { tabOrder.size },
+        initialPage = 0
+    )
+    val navSelectedTab = tabOrder.getOrNull(pagerState.targetPage) ?: selectedTab
 
     Scaffold(
         containerColor = colorScheme.background,
@@ -499,7 +477,7 @@ fun MainScreen(
                                 style = MaterialTheme.typography.labelSmall
                             )
                         },
-                        selected = selectedTab == item.screen,
+                        selected = navSelectedTab == item.screen,
                         onClick = { selectedTab = item.screen },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = colorScheme.primary,
@@ -513,32 +491,28 @@ fun MainScreen(
             }
         }
     ) { padding ->
-        // Tab 方向：根据切换方向决定动画
-        val tabOrder = listOf(MainTab.Home, MainTab.Search, MainTab.Favorites, MainTab.Profile)
-        val previousTabIndex = remember { mutableIntStateOf(0) }
+        // 使用 HorizontalPager 实现连续平滑滑动切换 Tab
+        // selectedTab（底部导航栏点击）→ 同步 Pager
         LaunchedEffect(selectedTab) {
-            previousTabIndex.intValue = tabOrder.indexOf(selectedTab).coerceAtLeast(0)
+            val targetPage = tabOrder.indexOf(selectedTab).coerceAtLeast(0)
+            if (targetPage != pagerState.settledPage || pagerState.currentPageOffsetFraction != 0f) {
+                pagerState.animateScrollToPage(targetPage)
+            }
         }
-        AnimatedContent(
-            targetState = selectedTab,
+        // Pager 滑动完成后再同步 selectedTab，避免动画途中 currentPage 回写导致卡在中间页
+        LaunchedEffect(pagerState.settledPage) {
+            if (pagerState.settledPage in tabOrder.indices) {
+                selectedTab = tabOrder[pagerState.settledPage]
+            }
+        }
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .padding(padding)
-                .background(colorScheme.background),
-            transitionSpec = {
-                val currentIdx = tabOrder.indexOf(targetState).coerceAtLeast(0)
-                val prevIdx = tabOrder.indexOf(initialState).coerceAtLeast(0)
-                val slideRight = currentIdx > prevIdx
-                if (slideRight) {
-                    (fadeIn(tween(200)) + slideInHorizontally(tween(200)) { it / 4 })
-                        .togetherWith(fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { -it / 4 })
-                } else {
-                    (fadeIn(tween(200)) + slideInHorizontally(tween(200)) { -it / 4 })
-                        .togetherWith(fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { it / 4 })
-                }
-            },
-            label = "tab_transition"
-        ) { tab ->
-            when (tab) {
+                .fillMaxSize()
+                .background(colorScheme.background)
+        ) { page ->
+            when (tabOrder[page]) {
                 MainTab.Home -> HomeScreen(
                     bookList = bookList, isLoading = bookIsLoading,
                     sections = homeSections,
@@ -575,10 +549,18 @@ fun MainScreen(
                     bookList = bookList, isLoading = bookIsLoading,
                     searchHistory = searchHistory,
                     initialQuery = searchQuery,
-                    onClearHistory = { searchHistory = emptyList() },
+                    onClearHistory = {
+                        prefs.clearSearchHistory()
+                        searchHistory = emptyList()
+                    },
+                    onDeleteHistory = { query ->
+                        prefs.removeSearchHistory(query)
+                        searchHistory = prefs.getSearchHistory()
+                    },
                     onBackClick = { selectedTab = MainTab.Home; searchQuery = "" },
                     onSearchClick = { query ->
-                        searchHistory = (listOf(query) + searchHistory.filter { it != query }).take(50)
+                        prefs.addSearchHistory(query)
+                        searchHistory = prefs.getSearchHistory()
                         // JM码识别：纯数字 或 JM/Jm/jm开头
                         val trimmed = query.trim()
                         if (trimmed.all { it.isDigit() } || trimmed.lowercase().startsWith("jm")) {

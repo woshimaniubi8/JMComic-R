@@ -1,7 +1,13 @@
 ﻿package com.batsd.jmcomict.ui.screen
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -15,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
@@ -26,7 +33,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 /**
  * 搜索界面 — FlClash 搜索体验
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
     bookList: List<BookItem>,
@@ -36,15 +43,21 @@ fun SearchScreen(
     onSearchClick: (String) -> Unit,
     onBookClick: (String) -> Unit,
     onClearHistory: () -> Unit = {},
+    onDeleteHistory: (String) -> Unit = {},
     initialQuery: String = "",
     onRefresh: () -> Unit = {}
 ) {
     var searchQuery by remember(initialQuery) { mutableStateOf(initialQuery) }
+    var searchFocused by remember { mutableStateOf(false) }
+    var historyDeleteMode by remember { mutableStateOf(false) }
     // 用户手动输入后清除 initialQuery 影响
     LaunchedEffect(initialQuery) {
         if (initialQuery.isNotEmpty()) {
             searchQuery = initialQuery
         }
+    }
+    LaunchedEffect(searchHistory) {
+        if (searchHistory.isEmpty()) historyDeleteMode = false
     }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -96,7 +109,8 @@ fun SearchScreen(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .focusRequester(focusRequester),
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { searchFocused = it.isFocused },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = {
@@ -135,7 +149,26 @@ fun SearchScreen(
 
             // 搜索结果
             Box(modifier = Modifier.fillMaxSize()) {
+                val showHistory = searchFocused && searchHistory.isNotEmpty()
                 when {
+                    showHistory -> {
+                        SearchHistoryList(
+                            searchHistory = searchHistory,
+                            deleteMode = historyDeleteMode,
+                            onDeleteModeChange = { historyDeleteMode = it },
+                            onClearHistory = {
+                                historyDeleteMode = false
+                                onClearHistory()
+                            },
+                            onSearchHistoryClick = { query ->
+                                if (historyDeleteMode) return@SearchHistoryList
+                                searchQuery = query
+                                onSearchClick(query)
+                                focusManager.clearFocus()
+                            },
+                            onDeleteHistory = onDeleteHistory
+                        )
+                    }
                     isLoading -> {
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -169,26 +202,22 @@ fun SearchScreen(
                     }
                     else -> {
                         if (searchHistory.isNotEmpty()) {
-                            Column(Modifier.padding(16.dp)) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("搜索历史", style = MaterialTheme.typography.titleSmall)
-                                    TextButton(onClick = onClearHistory) { Text("清除") }
-                                }
-                                searchHistory.take(10).forEach { query ->
-                                    Surface(onClick = {
-                                        searchQuery = query
-                                        onSearchClick(query)
-                                    }, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                        shape = MaterialTheme.shapes.small,
-                                        color = colorScheme.surfaceContainerLow) {
-                                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.History, null, Modifier.size(16.dp), tint = colorScheme.onSurfaceVariant)
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(query, style = MaterialTheme.typography.bodyMedium)
-                                        }
-                                    }
-                                }
-                            }
+                            SearchHistoryList(
+                                searchHistory = searchHistory,
+                                deleteMode = historyDeleteMode,
+                                onDeleteModeChange = { historyDeleteMode = it },
+                                onClearHistory = {
+                                    historyDeleteMode = false
+                                    onClearHistory()
+                                },
+                                onSearchHistoryClick = { query ->
+                                    if (historyDeleteMode) return@SearchHistoryList
+                                    searchQuery = query
+                                    onSearchClick(query)
+                                    focusManager.clearFocus()
+                                },
+                                onDeleteHistory = onDeleteHistory
+                            )
                         } else {
                             EmptyState(message = "输入关键词搜索漫画", icon = Icons.Default.Search)
                         }
@@ -197,5 +226,81 @@ fun SearchScreen(
             }
         }
     }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SearchHistoryList(
+    searchHistory: List<String>,
+    deleteMode: Boolean,
+    onDeleteModeChange: (Boolean) -> Unit,
+    onClearHistory: () -> Unit,
+    onSearchHistoryClick: (String) -> Unit,
+    onDeleteHistory: (String) -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                enabled = deleteMode,
+                interactionSource = interactionSource,
+                indication = null
+            ) { onDeleteModeChange(false) }
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("搜索历史", style = MaterialTheme.typography.titleSmall)
+                    TextButton(onClick = onClearHistory) { Text("清除") }
+                }
+            }
+            lazyItems(searchHistory, key = { it }) { query ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp)
+                        .combinedClickable(
+                            onClick = { onSearchHistoryClick(query) },
+                            onLongClick = { onDeleteModeChange(true) }
+                        ),
+                    shape = MaterialTheme.shapes.small,
+                    color = colorScheme.surfaceContainerLow
+                ) {
+                    Row(
+                        Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.History, null, Modifier.size(16.dp), tint = colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            query,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (deleteMode) {
+                            IconButton(
+                                onClick = { onDeleteHistory(query) },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "删除",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

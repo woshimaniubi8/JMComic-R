@@ -160,12 +160,27 @@ class PreferencesManager(context: Context) {
         sharedPreferences.getStringSet("hidden_history", emptySet()) ?: emptySet()
 
     // 搜索历史
-    fun getSearchHistory(): List<String> = sharedPreferences.getString("search_history", "")?.split("|||")?.filter { it.isNotEmpty() } ?: emptyList()
+    fun getSearchHistory(): List<String> =
+        sharedPreferences.getString("search_history", "")
+            ?.split("|||")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.take(MAX_SEARCH_HISTORY)
+            ?: emptyList()
+
     fun addSearchHistory(query: String) {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isEmpty()) return
         val list = getSearchHistory().toMutableList()
-        list.remove(query)
-        list.add(0, query)
-        if (list.size > 20) list.removeAt(list.lastIndex)
+        list.remove(normalizedQuery)
+        list.add(0, normalizedQuery)
+        while (list.size > MAX_SEARCH_HISTORY) list.removeAt(list.lastIndex)
+        sharedPreferences.edit().putString("search_history", list.joinToString("|||")).apply()
+    }
+    fun removeSearchHistory(query: String) {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isEmpty()) return
+        val list = getSearchHistory().filter { it != normalizedQuery }
         sharedPreferences.edit().putString("search_history", list.joinToString("|||")).apply()
     }
     fun clearSearchHistory() { sharedPreferences.edit().remove("search_history").apply() }
@@ -188,4 +203,8 @@ class PreferencesManager(context: Context) {
     /** 首次运行免责声明同意状态 */
     fun hasAgreedDisclaimer(): Boolean = sharedPreferences.getBoolean("agreed_disclaimer", false)
     fun setAgreedDisclaimer(agreed: Boolean) { sharedPreferences.edit().putBoolean("agreed_disclaimer", agreed).apply() }
+
+    companion object {
+        private const val MAX_SEARCH_HISTORY = 150
+    }
 }
