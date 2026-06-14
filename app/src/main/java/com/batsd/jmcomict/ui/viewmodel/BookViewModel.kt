@@ -74,22 +74,63 @@ class BookViewModel(
     fun getCurrentBookId(): String = currentBookId
     /** 当前正在查看的 epsId */
     private var currentEpsId: String = ""
+
+    private var _searchQuery = ""
+    private var _searchSort = "mr"
+    private var _searchPage = 1
+    private var _searchTotal = 0
+    private var _searchHasMore = false
+    private var _searchLoadingMore = false
+    val searchHasMore: Boolean get() = _searchHasMore
     
     fun searchBooks(query: String, page: Int = 1, sort: String = "mr") {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isEmpty()) {
+            _bookList.value = emptyList()
+            _searchQuery = ""
+            _searchHasMore = false
+            return
+        }
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
+            if (page == 1) {
+                _searchQuery = normalizedQuery
+                _searchSort = sort
+                _searchTotal = 0
+                _searchHasMore = false
+                _bookList.value = emptyList()
+            }
 
-            bookRepository.searchBooks(query, page, sort)
-                .onSuccess { books ->
-                    _bookList.value = books
+            bookRepository.searchBooksData(normalizedQuery, page, sort)
+                .onSuccess { data ->
+                    _searchPage = page
+                    _searchTotal = data.total
+                    _bookList.value = if (page == 1) data.content else _bookList.value + data.content
+                    _searchHasMore = if (_searchTotal > 0) {
+                        _bookList.value.size < _searchTotal && data.content.isNotEmpty()
+                    } else {
+                        data.content.isNotEmpty()
+                    }
+                    android.util.Log.d(
+                        "BookVM",
+                        "searchBooks: query=$normalizedQuery, page=$page, got=${data.content.size}, total=${data.total}, accumulated=${_bookList.value.size}, hasMore=$_searchHasMore"
+                    )
                 }
                 .onFailure { exception ->
+                    android.util.Log.e("BookVM", "searchBooks failed: query=$normalizedQuery, page=$page", exception)
                     _error.value = exception.message
                 }
 
             _isLoading.value = false
+            _searchLoadingMore = false
         }
+    }
+
+    fun loadMoreSearch() {
+        if (_searchQuery.isBlank() || !_searchHasMore || _searchLoadingMore || _isLoading.value) return
+        _searchLoadingMore = true
+        searchBooks(_searchQuery, _searchPage + 1, _searchSort)
     }
 
     fun getBookList(page: String = "0") {

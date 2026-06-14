@@ -139,6 +139,16 @@ class PreferencesManager(context: Context) {
     fun getAutoCheckUpdate(): Boolean = sharedPreferences.getBoolean("auto_check_update", true)
     fun setAutoCheckUpdate(enabled: Boolean) { sharedPreferences.edit().putBoolean("auto_check_update", enabled).apply() }
 
+    /** 自动签到 */
+    fun getAutoDailyCheckIn(): Boolean = sharedPreferences.getBoolean("auto_daily_check_in", false)
+    fun setAutoDailyCheckIn(enabled: Boolean) {
+        sharedPreferences.edit().putBoolean("auto_daily_check_in", enabled).apply()
+    }
+    fun getLastAutoCheckInDate(): String = sharedPreferences.getString("last_auto_check_in_date", "") ?: ""
+    fun setLastAutoCheckInDate(date: String) {
+        sharedPreferences.edit().putString("last_auto_check_in_date", date).apply()
+    }
+
     // ===== 兼容设置 =====
     /** 图片降采样 — 按屏幕宽度缩减分辨率，大幅降低内存占用 */
     fun getCompatImageDownsample(): Boolean = sharedPreferences.getBoolean("compat_img_downsample", false)

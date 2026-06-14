@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -44,6 +46,10 @@ fun SearchScreen(
     onBookClick: (String) -> Unit,
     onClearHistory: () -> Unit = {},
     onDeleteHistory: (String) -> Unit = {},
+    hasMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
+    onClearQuery: () -> Unit = {},
+    activeQuery: String = "",
     initialQuery: String = "",
     onRefresh: () -> Unit = {}
 ) {
@@ -116,19 +122,24 @@ fun SearchScreen(
                         keyboardActions = KeyboardActions(onSearch = {
                             if (searchQuery.isNotEmpty()) {
                                 onSearchClick(searchQuery)
+                                searchFocused = false
                                 focusManager.clearFocus()
                             }
                         }),
                         trailingIcon = {
                             Row {
                                 if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
+                                    IconButton(onClick = {
+                                        searchQuery = ""
+                                        onClearQuery()
+                                    }) {
                                         Icon(Icons.Default.Close, contentDescription = "清除")
                                     }
                                 }
                                 IconButton(onClick = {
                                     if (searchQuery.isNotEmpty()) {
                                         onSearchClick(searchQuery)
+                                        searchFocused = false
                                         focusManager.clearFocus()
                                     }
                                 }) {
@@ -149,7 +160,8 @@ fun SearchScreen(
 
             // 搜索结果
             Box(modifier = Modifier.fillMaxSize()) {
-                val showHistory = searchFocused && searchHistory.isNotEmpty()
+                val hasSubmittedSearch = activeQuery.isNotBlank()
+                val showHistory = searchFocused && searchHistory.isNotEmpty() && !isLoading && !hasSubmittedSearch
                 when {
                     showHistory -> {
                         SearchHistoryList(
@@ -169,7 +181,7 @@ fun SearchScreen(
                             onDeleteHistory = onDeleteHistory
                         )
                     }
-                    isLoading -> {
+                    isLoading && hasSubmittedSearch && bookList.isEmpty() -> {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -177,14 +189,27 @@ fun SearchScreen(
                             CircularProgressIndicator(color = colorScheme.primary)
                         }
                     }
-                    bookList.isEmpty() && searchQuery.isNotEmpty() -> {
+                    hasSubmittedSearch && bookList.isEmpty() -> {
                         EmptyState(
                             message = "未找到相关漫画",
                             icon = Icons.Default.SearchOff
                         )
                     }
-                    bookList.isNotEmpty() -> {
+                    hasSubmittedSearch && bookList.isNotEmpty() -> {
+                        val gridState = rememberLazyGridState()
+                        val shouldLoadMore by remember {
+                            derivedStateOf {
+                                val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                                lastVisible >= bookList.size - 6 && bookList.isNotEmpty()
+                            }
+                        }
+                        LaunchedEffect(shouldLoadMore, isLoading, hasMore) {
+                            if (shouldLoadMore && hasMore && !isLoading) {
+                                onLoadMore()
+                            }
+                        }
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Adaptive(minSize = 160.dp),
                             modifier = Modifier
                                 .fillMaxSize()
@@ -197,6 +222,21 @@ fun SearchScreen(
                                     book = book,
                                     onClick = { onBookClick(book.id) }
                                 )
+                            }
+                            if (isLoading) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

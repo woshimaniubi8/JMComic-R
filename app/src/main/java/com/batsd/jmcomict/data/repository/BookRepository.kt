@@ -21,11 +21,16 @@ class BookRepository {
 
     suspend fun searchBooks(query: String, page: Int = 1, sort: String = "mr"): Result<List<BookItem>> {
         // 搜索 API 返回 {search_query, total, content: [...]}，不是裸数组
+        return searchBooksData(query, page, sort).map { it.content }
+    }
+
+    suspend fun searchBooksData(query: String, page: Int = 1, sort: String = "mr"): Result<BookListData> {
+        // 搜索 API 返回 {search_query, total, content: [...]}，不是裸数组
         return try {
             val response = apiService.searchBooks(query, sort, page)
             if (response.isSuccess()) {
                 val data = response.decryptAndParse<BookListData>()
-                if (data != null) Result.success(data.content)
+                if (data != null) Result.success(data)
                 else Result.failure(Exception("搜索数据解析失败"))
             } else {
                 Result.failure(Exception(response.errorMessage()))

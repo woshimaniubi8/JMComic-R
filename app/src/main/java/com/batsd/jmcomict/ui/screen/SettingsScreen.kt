@@ -43,12 +43,15 @@ fun SettingsScreen(
     onUpdateClick: (() -> Unit)? = null,
     autoCheckUpdate: Boolean = true,
     onToggleAutoCheckUpdate: (Boolean) -> Unit = {},
+    autoCheckInEnabled: Boolean = false,
+    onSetAutoCheckIn: (Boolean) -> Unit = {},
     onCompatibilityClick: (() -> Unit)? = null
 ) {
     var showCdnDialog by remember { mutableStateOf(false) }
     var showImageCdnDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var showAutoCheckInDialog by remember { mutableStateOf(false) }
     val colorScheme = MaterialTheme.colorScheme
     val modeNames = listOf("跟随系统", "浅色", "深色")
     val toast = LocalToast.current
@@ -185,6 +188,30 @@ fun SettingsScreen(
 
             if (isLoggedIn) {
                 item { Spacer(Modifier.height(8.dp)); InfoHeader(title = "账户", icon = Icons.Default.Person) }
+                item {
+                    CommonCard(variant = CardVariant.Filled, onClick = { showAutoCheckInDialog = true }) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CalendarToday, null, Modifier.size(20.dp), tint = colorScheme.primary)
+                                Spacer(Modifier.width(12.dp))
+                                Text("自动签到", style = MaterialTheme.typography.bodyMedium, color = colorScheme.onSurface)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    if (autoCheckInEnabled) "已开启" else "已关闭",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colorScheme.onSurfaceVariant.opacity60
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = colorScheme.onSurfaceVariant.opacity38)
+                            }
+                        }
+                    }
+                }
                 item {
                     CommonCard(variant = CardVariant.Filled, onClick = { showLogoutConfirm = true }) {
                         Row(
@@ -333,6 +360,35 @@ fun SettingsScreen(
                             RadioButton(selected = themeMode == index, onClick = null)
                             Spacer(Modifier.width(12.dp))
                             Text(name, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    if (showAutoCheckInDialog) {
+        AlertDialog(
+            onDismissRequest = { showAutoCheckInDialog = false },
+            confirmButton = { TextButton(onClick = { showAutoCheckInDialog = false }) { Text("取消") } },
+            title = { Text("自动签到") },
+            shape = MaterialTheme.shapes.medium,
+            containerColor = colorScheme.surfaceContainerHigh,
+            text = {
+                Column {
+                    listOf(false to "关闭", true to "开启").forEach { (enabled, label) ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable {
+                                    onSetAutoCheckIn(enabled)
+                                    showAutoCheckInDialog = false
+                                }
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = autoCheckInEnabled == enabled, onClick = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(label, style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                 }
