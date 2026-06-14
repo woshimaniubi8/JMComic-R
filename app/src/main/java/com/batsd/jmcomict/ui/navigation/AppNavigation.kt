@@ -93,6 +93,8 @@ fun MainScreen(
     var cdnIndex by remember { mutableIntStateOf(ApiClientFactory.getCurrentCdnIndex()) }
     var apiUrlIndex by remember { mutableIntStateOf(ApiClientFactory.getCurrentApiUrlIndex()) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
     val versionName = remember {
         try {
             @Suppress("DEPRECATION")
@@ -102,12 +104,18 @@ fun MainScreen(
         }
     }
     val updateViewModel = remember { com.batsd.jmcomict.ui.viewmodel.UpdateViewModel(prefs = prefs) }
+    val latestRelease by updateViewModel.release.collectAsState()
+    val updateIsChecking by updateViewModel.isChecking.collectAsState()
+    val updateError by updateViewModel.error.collectAsState()
     val userIsLoading by userViewModel.isLoading.collectAsState()
     val userError by userViewModel.error.collectAsState()
 
     // 低内存设备弹窗
     var showLowRamDialog by remember { mutableStateOf(false) }
     var pendingReaderEpsId by remember { mutableStateOf("") }
+    var autoUpdateCheckStarted by remember { mutableStateOf(false) }
+    var autoUpdateDialogConsumed by remember { mutableStateOf(false) }
+    var showAutoUpdateDialog by remember { mutableStateOf(false) }
 
     // 双击返回退出
     var backPressedTime by remember { mutableLongStateOf(0L) }
@@ -157,16 +165,33 @@ fun MainScreen(
     val history by bookViewModel.history.collectAsState()
     val homeSections by bookViewModel.homeSections.collectAsState()
     val user by userViewModel.user.collectAsState()
+    var autoDailyCheckIn by remember { mutableStateOf(prefs.getAutoDailyCheckIn()) }
     // 启动时清理旧APK并自动检测版本更新
     LaunchedEffect(Unit) {
         updateViewModel.cleanupDownloadedApks(context)
         if (updateViewModel.autoCheckEnabled) {
+            autoUpdateCheckStarted = true
             updateViewModel.checkForUpdates()
+        }
+    }
+    LaunchedEffect(latestRelease, updateIsChecking, updateError) {
+        val release = latestRelease
+        if (
+            autoUpdateCheckStarted &&
+            !autoUpdateDialogConsumed &&
+            !updateIsChecking &&
+            updateError == null &&
+            release != null &&
+            hasNewVersion(release.tag_name, versionName)
+        ) {
+            showAutoUpdateDialog = true
+            autoUpdateDialogConsumed = true
         }
     }
     LaunchedEffect(selectedTab) {
         when (selectedTab) {
             MainTab.Home -> if (bookList.isEmpty()) bookViewModel.getHomeSections()
+            MainTab.Search -> searchHistory = prefs.getSearchHistory()
             MainTab.Favorites -> if (bookViewModel.favorites.value.isEmpty()) bookViewModel.getFavorites()
             MainTab.Profile -> bookViewModel.getHistory()
             else -> {}
@@ -178,6 +203,11 @@ fun MainScreen(
     LaunchedEffect(user?.isLogin) {
         if (user?.isLogin == true && subScreen is SubScreen.Login) {
             subScreen = SubScreen.None
+        }
+        if (user?.isLogin == true) {
+            userViewModel.autoDailyCheckInIfNeeded(showSkippedResult = true) { _, msg ->
+                scope.launch { toast(msg) }
+            }
         }
     }
 
@@ -376,6 +406,18 @@ fun MainScreen(
                 onUpdateClick = { subScreen = SubScreen.Update },
                 autoCheckUpdate = updateViewModel.autoCheckEnabled,
                 onToggleAutoCheckUpdate = { updateViewModel.setAutoCheckEnabled(it) },
+                autoCheckInEnabled = autoDailyCheckIn,
+                onSetAutoCheckIn = { enabled ->
+                    autoDailyCheckIn = enabled
+                    prefs.setAutoDailyCheckIn(enabled)
+                    if (enabled) {
+                        userViewModel.autoDailyCheckInIfNeeded(force = true) { _, msg ->
+                            scope.launch { toast(msg) }
+                        }
+                    } else {
+                        scope.launch { toast("已关闭自动签到") }
+                    }
+                },
                 onCompatibilityClick = { subScreen = SubScreen.CompatibilitySettings }
             )
             is SubScreen.LineTest -> LineTestScreen(
@@ -549,6 +591,13 @@ fun MainScreen(
                     bookList = bookList, isLoading = bookIsLoading,
                     searchHistory = searchHistory,
                     initialQuery = searchQuery,
+                    activeQuery = searchQuery,
+                    hasMore = bookViewModel.searchHasMore,
+                    onLoadMore = { bookViewModel.loadMoreSearch() },
+                    onClearQuery = {
+                        searchQuery = ""
+                        bookViewModel.setBooks(emptyList())
+                    },
                     onClearHistory = {
                         prefs.clearSearchHistory()
                         searchHistory = emptyList()
@@ -559,6 +608,7 @@ fun MainScreen(
                     },
                     onBackClick = { selectedTab = MainTab.Home; searchQuery = "" },
                     onSearchClick = { query ->
+                        searchQuery = query.trim()
                         prefs.addSearchHistory(query)
                         searchHistory = prefs.getSearchHistory()
                         // JM码识别：纯数字 或 JM/Jm/jm开头
@@ -660,7 +710,45 @@ fun MainScreen(
         )
     }
 
+    val autoUpdateRelease = latestRelease
+    if (showAutoUpdateDialog && autoUpdateRelease != null) {
+        AlertDialog(
+            onDismissRequest = { showAutoUpdateDialog = false },
+            icon = { Icon(Icons.Default.NewReleases, null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("发现新版本") },
+            text = {
+                Text("发现新版本 ${autoUpdateRelease.tag_name}，当前版本 v${versionName.ifEmpty { "?" }}。")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showAutoUpdateDialog = false
+                    subScreen = SubScreen.Update
+                }) { Text("立即查看") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAutoUpdateDialog = false }) { Text("稍后") }
+            }
+        )
+    }
+
     } // close Box wrapper
+}
+
+private fun hasNewVersion(latestTag: String, currentVersion: String): Boolean {
+    val latest = latestTag.removePrefix("v").split(".").mapNotNull { it.toIntOrNull() }
+    val current = currentVersion.split(".").mapNotNull { it.toIntOrNull() }
+    if (latest.isEmpty() || current.isEmpty()) return latestTag != "v$currentVersion"
+    return compareVersionList(latest, current) > 0
+}
+
+private fun compareVersionList(a: List<Int>, b: List<Int>): Int {
+    val maxLen = maxOf(a.size, b.size)
+    for (i in 0 until maxLen) {
+        val va = a.getOrElse(i) { 0 }
+        val vb = b.getOrElse(i) { 0 }
+        if (va != vb) return va - vb
+    }
+    return 0
 }
 
 /**

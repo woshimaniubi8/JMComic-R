@@ -61,11 +61,56 @@ class UserViewModel(private val userRepository: UserRepository) : ViewModel() {
     }
 
     fun dailyCheckIn(onResult: (Boolean, String) -> Unit = { _, _ -> }) {
-        val uid = _user.value?.uid ?: return
+        val uid = _user.value?.uid ?: run {
+            onResult(false, "请先登录")
+            return
+        }
         viewModelScope.launch {
             userRepository.dailyCheckIn(uid)
                 .onSuccess { msg -> onResult(true, msg) }
                 .onFailure { e -> onResult(false, e.message ?: "签到失败") }
+        }
+    }
+
+    fun autoDailyCheckInIfNeeded(
+        force: Boolean = false,
+        showSkippedResult: Boolean = false,
+        onResult: ((Boolean, String) -> Unit)? = null
+    ) {
+        val uid = _user.value?.uid ?: run {
+            onResult?.invoke(false, "请先登录")
+            return
+        }
+        if (!userRepository.prefs.getAutoDailyCheckIn()) {
+            onResult?.invoke(false, "自动签到未开启")
+            return
+        }
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            .format(java.util.Date())
+        if (userRepository.prefs.getLastAutoCheckInDate() == today) {
+            if (showSkippedResult || force) {
+                onResult?.invoke(true, "今天已自动签到")
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            userRepository.dailyCheckIn(uid)
+                .onSuccess { msg ->
+                    android.util.Log.i("UserVM", "Auto daily check-in result: $msg")
+                    userRepository.prefs.setLastAutoCheckInDate(today)
+                    onResult?.invoke(true, msg.ifBlank { "自动签到成功" })
+                }
+                .onFailure { e ->
+                    val msg = e.message.orEmpty()
+                    android.util.Log.w("UserVM", "Auto daily check-in failed: $msg")
+                    if (msg.contains("已") || msg.contains("already", ignoreCase = true)) {
+                        userRepository.prefs.setLastAutoCheckInDate(today)
+                        onResult?.invoke(true, msg.ifBlank { "今天已签到" })
+                    } else if (force || showSkippedResult) {
+                        onResult?.invoke(false, "自动签到失败：${msg.ifBlank { "未知错误" }}")
+                    }
+                }
         }
     }
 

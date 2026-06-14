@@ -9,17 +9,16 @@ import androidx.lifecycle.viewModelScope
 import com.batsd.jmcomict.data.local.PreferencesManager
 import com.batsd.jmcomict.data.model.GitHubRelease
 import com.batsd.jmcomict.data.repository.ReleaseRepository
+import com.batsd.jmcomict.data.repository.UnsafeUpdateHttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
-import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
@@ -68,13 +67,10 @@ class UpdateViewModel(
         }
     }
 
-    private val downloadClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .sslSocketFactory(createUnsafeSslContext().socketFactory, trustAllCerts[0] as X509TrustManager)
-        .hostnameVerifier { _, _ -> true }
-        .build()
+    private val downloadClient = UnsafeUpdateHttpClient.create(
+        connectTimeoutSeconds = 30,
+        readTimeoutSeconds = 60
+    )
 
     fun checkForUpdates() {
         viewModelScope.launch {

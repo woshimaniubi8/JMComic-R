@@ -2,16 +2,14 @@ package com.batsd.jmcomict.data.repository
 
 import com.batsd.jmcomict.data.model.GitHubRelease
 import kotlinx.serialization.json.Json
-import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.util.concurrent.TimeUnit
 
 class ReleaseRepository {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val client = UnsafeUpdateHttpClient.create(
+        connectTimeoutSeconds = 15,
+        readTimeoutSeconds = 15
+    )
 
     /** 获取最新版本信息 */
     suspend fun getLatestRelease(): Result<GitHubRelease> {
