@@ -78,18 +78,18 @@ class UserViewModel(private val userRepository: UserRepository) : ViewModel() {
         onResult: ((Boolean, String) -> Unit)? = null
     ) {
         val uid = _user.value?.uid ?: run {
-            onResult?.invoke(false, "请先登录")
+         //   onResult?.invoke(false, "请先登录")
             return
         }
         if (!userRepository.prefs.getAutoDailyCheckIn()) {
-            onResult?.invoke(false, "自动签到未开启")
+           // onResult?.invoke(false, "自动签到未开启")
             return
         }
         val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
             .format(java.util.Date())
         if (userRepository.prefs.getLastAutoCheckInDate() == today) {
             if (showSkippedResult || force) {
-                onResult?.invoke(true, "今天已自动签到")
+              //  onResult?.invoke(true, "今天已自动签到")
             }
             return
         }
