@@ -78,7 +78,8 @@ class BookViewModel(
     private var _searchQuery = ""
     private var _searchSort = "mr"
     private var _searchPage = 1
-    private var _searchTotal = 0
+    private val _searchTotal = MutableStateFlow(0)
+    val searchTotal: StateFlow<Int> = _searchTotal
     private var _searchHasMore = false
     private var _searchLoadingMore = false
     val searchHasMore: Boolean get() = _searchHasMore
@@ -88,6 +89,7 @@ class BookViewModel(
         if (normalizedQuery.isEmpty()) {
             _bookList.value = emptyList()
             _searchQuery = ""
+            _searchTotal.value = 0
             _searchHasMore = false
             return
         }
@@ -97,7 +99,7 @@ class BookViewModel(
             if (page == 1) {
                 _searchQuery = normalizedQuery
                 _searchSort = sort
-                _searchTotal = 0
+                _searchTotal.value = 0
                 _searchHasMore = false
                 _bookList.value = emptyList()
             }
@@ -105,10 +107,10 @@ class BookViewModel(
             bookRepository.searchBooksData(normalizedQuery, page, sort)
                 .onSuccess { data ->
                     _searchPage = page
-                    _searchTotal = data.total
+                    _searchTotal.value = data.total
                     _bookList.value = if (page == 1) data.content else _bookList.value + data.content
-                    _searchHasMore = if (_searchTotal > 0) {
-                        _bookList.value.size < _searchTotal && data.content.isNotEmpty()
+                    _searchHasMore = if (_searchTotal.value > 0) {
+                        _bookList.value.size < _searchTotal.value && data.content.isNotEmpty()
                     } else {
                         data.content.isNotEmpty()
                     }

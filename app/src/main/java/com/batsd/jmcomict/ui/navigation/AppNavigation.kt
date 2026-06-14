@@ -164,6 +164,7 @@ fun MainScreen(
     val commentResult by bookViewModel.commentResult.collectAsState()
     val history by bookViewModel.history.collectAsState()
     val homeSections by bookViewModel.homeSections.collectAsState()
+    val searchTotal by bookViewModel.searchTotal.collectAsState()
     val user by userViewModel.user.collectAsState()
     var autoDailyCheckIn by remember { mutableStateOf(prefs.getAutoDailyCheckIn()) }
     // 启动时清理旧APK并自动检测版本更新
@@ -592,6 +593,7 @@ fun MainScreen(
                     searchHistory = searchHistory,
                     initialQuery = searchQuery,
                     activeQuery = searchQuery,
+                    resultTotal = searchTotal,
                     hasMore = bookViewModel.searchHasMore,
                     onLoadMore = { bookViewModel.loadMoreSearch() },
                     onClearQuery = {

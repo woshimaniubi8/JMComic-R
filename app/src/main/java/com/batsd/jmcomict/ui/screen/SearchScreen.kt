@@ -50,6 +50,7 @@ fun SearchScreen(
     onLoadMore: () -> Unit = {},
     onClearQuery: () -> Unit = {},
     activeQuery: String = "",
+    resultTotal: Int = 0,
     initialQuery: String = "",
     onRefresh: () -> Unit = {}
 ) {
@@ -197,6 +198,7 @@ fun SearchScreen(
                     }
                     hasSubmittedSearch && bookList.isNotEmpty() -> {
                         val gridState = rememberLazyGridState()
+                        val displayTotal = if (resultTotal > 0) resultTotal else bookList.size
                         val shouldLoadMore by remember {
                             derivedStateOf {
                                 val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -217,6 +219,16 @@ fun SearchScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    "搜索 \"${activeQuery}\" 共 ${displayTotal} 结果",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
                             items(bookList, key = { it.id }) { book ->
                                 BookCard(
                                     book = book,
