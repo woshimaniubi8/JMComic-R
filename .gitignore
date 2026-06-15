@@ -20,3 +20,4 @@ output-metadata.json
 .cxx
 local.properties
 /.kotlin
+/*.py
