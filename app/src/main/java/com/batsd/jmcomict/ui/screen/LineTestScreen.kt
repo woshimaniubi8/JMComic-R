@@ -30,6 +30,8 @@ import java.util.concurrent.TimeUnit
  */
 enum class TestLineType { API, IMAGE }
 
+private const val TESTING_MESSAGE = "测试中"
+
 /**
  * 线路测试结果数据
  */
@@ -207,7 +209,7 @@ fun LineTestScreen(
                     isCurrent = index == currentApiUrlIndex,
                     latencyColor = latencyColor(result.latency),
                     latencyText = latencyText(result),
-                    isTestingNow = isTesting && testingPhase == "api" && index == testingIndex,
+                    isTestingNow = isTesting && result.errorMsg == TESTING_MESSAGE,
                     onClick = {
                         if (result.isSuccess && result.latency >= 0) {
                             showApiSelectDialog = true
@@ -240,7 +242,7 @@ fun LineTestScreen(
                     isCurrent = index == currentImageCdnIndex,
                     latencyColor = latencyColor(result.latency),
                     latencyText = latencyText(result),
-                    isTestingNow = isTesting && testingPhase == "image" && index == testingIndex,
+                    isTestingNow = isTesting && result.errorMsg == TESTING_MESSAGE,
                     onClick = {
                         if (result.isSuccess && result.latency >= 0) {
                             showImageSelectDialog = true
@@ -710,8 +712,10 @@ private fun runAllTests(
 ) {
     scope.launch(Dispatchers.IO) {
         val client = OkHttpClient.Builder()
+            .callTimeout(10, TimeUnit.SECONDS)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
             .followRedirects(true)
             .build()
 
@@ -719,6 +723,53 @@ private fun runAllTests(
         val apiNames = ApiClientFactory.getApiUrlNames()
         val cdnUrls = ApiClientFactory.getCdnUrlList()
         val cdnNames = ApiClientFactory.getCdnUrlNames()
+
+        val total = apiUrls.size + cdnUrls.size
+        val parallelApiResults = apiUrls.mapIndexed { index, url ->
+            val name = apiNames.getOrElse(index) { "分流${index + 1}" }
+            LineTestResult(name, url, -1, false, TestLineType.API, TESTING_MESSAGE)
+        }.toMutableList()
+        val parallelImageResults = cdnUrls.mapIndexed { index, url ->
+            val name = cdnNames.getOrElse(index) { "图片分流${index + 1}" }
+            LineTestResult(name, url, -1, false, TestLineType.IMAGE, TESTING_MESSAGE)
+        }.toMutableList()
+        var parallelCompleted = 0
+
+        withContext(Dispatchers.Main) {
+            onProgress("all", 0, total, parallelApiResults.toList(), parallelImageResults.toList())
+        }
+
+        coroutineScope {
+            val jobs = mutableListOf<Job>()
+            apiUrls.forEachIndexed { index, url ->
+                val name = apiNames.getOrElse(index) { "分流${index + 1}" }
+                jobs += launch {
+                    val result = testSingleUrl(client, name, url, TestLineType.API)
+                    withContext(Dispatchers.Main) {
+                        parallelApiResults[index] = result
+                        parallelCompleted += 1
+                        onProgress("all", parallelCompleted, total, parallelApiResults.toList(), parallelImageResults.toList())
+                    }
+                }
+            }
+            cdnUrls.forEachIndexed { index, url ->
+                val name = cdnNames.getOrElse(index) { "图片分流${index + 1}" }
+                jobs += launch {
+                    val result = testSingleUrl(client, name, url, TestLineType.IMAGE)
+                    withContext(Dispatchers.Main) {
+                        parallelImageResults[index] = result
+                        parallelCompleted += 1
+                        onProgress("all", parallelCompleted, total, parallelApiResults.toList(), parallelImageResults.toList())
+                    }
+                }
+            }
+            jobs.joinAll()
+        }
+
+        withContext(Dispatchers.Main) {
+            onComplete(parallelApiResults.toList(), parallelImageResults.toList())
+        }
+        return@launch
 
         // 用占位结果初始化列表
         val placeholdersApi = apiUrls.mapIndexed { index, url ->

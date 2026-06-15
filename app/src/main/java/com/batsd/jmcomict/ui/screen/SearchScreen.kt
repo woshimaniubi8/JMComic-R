@@ -70,13 +70,6 @@ fun SearchScreen(
     val focusManager = LocalFocusManager.current
     val colorScheme = MaterialTheme.colorScheme
 
-    // 仅在从外部传入搜索词时自动聚焦（标签/角色点击）
-    LaunchedEffect(initialQuery) {
-        if (initialQuery.isNotEmpty()) {
-            focusRequester.requestFocus()
-        }
-    }
-
     Scaffold(
         containerColor = colorScheme.background
     ) { padding ->

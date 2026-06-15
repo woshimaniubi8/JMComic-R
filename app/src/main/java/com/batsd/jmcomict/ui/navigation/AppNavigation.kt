@@ -207,7 +207,9 @@ fun MainScreen(
         }
         if (user?.isLogin == true) {
             userViewModel.autoDailyCheckInIfNeeded(showSkippedResult = true) { _, msg ->
-                scope.launch { toast(msg) }
+                if (shouldShowAutoCheckInToast(msg)) {
+                    scope.launch { toast(formatAutoCheckInMessage(msg)) }
+                }
             }
         }
     }
@@ -413,7 +415,9 @@ fun MainScreen(
                     prefs.setAutoDailyCheckIn(enabled)
                     if (enabled) {
                         userViewModel.autoDailyCheckInIfNeeded(force = true) { _, msg ->
-                            scope.launch { toast(msg) }
+                            if (shouldShowAutoCheckInToast(msg)) {
+                                scope.launch { toast(formatAutoCheckInMessage(msg)) }
+                            }
                         }
                     } else {
                         scope.launch { toast("已关闭自动签到") }
@@ -490,7 +494,7 @@ fun MainScreen(
     val tabOrder = listOf(MainTab.Home, MainTab.Search, MainTab.Favorites, MainTab.Profile)
     val pagerState = rememberPagerState(
         pageCount = { tabOrder.size },
-        initialPage = 0
+        initialPage = tabOrder.indexOf(selectedTab).coerceAtLeast(0)
     )
     val navSelectedTab = tabOrder.getOrNull(pagerState.targetPage) ?: selectedTab
 
@@ -751,6 +755,21 @@ private fun compareVersionList(a: List<Int>, b: List<Int>): Int {
         if (va != vb) return va - vb
     }
     return 0
+}
+
+private fun shouldShowAutoCheckInToast(message: String): Boolean {
+    val normalized = formatAutoCheckInMessage(message)
+    if (normalized.isEmpty()) return false
+    return !listOf("自动签到未开启", "请先登录", "今天已自动签到", "今天已签到")
+        .any { normalized.contains(it) }
+}
+
+private fun formatAutoCheckInMessage(message: String): String {
+    return message
+        .replace("<br>", "\n")
+        .replace("<br/>", "\n")
+        .replace("<br />", "\n")
+        .trim()
 }
 
 /**

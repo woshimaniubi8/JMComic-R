@@ -96,26 +96,13 @@ class UserRepository(
     suspend fun dailyCheckIn(uid: String): Result<String> {
         return try {
             // 步骤1: GET /daily 获取 daily_id
-            val statusResp = apiService.dailyStatus(uid)
-            if (!statusResp.isSuccess()) return Result.failure(Exception(statusResp.errorMessage()))
-            var dailyId = ""
-            val statusData = when (val d = statusResp.data) {
-                is kotlinx.serialization.json.JsonPrimitive -> d.content
-                else -> null
-            }
-            if (!statusData.isNullOrEmpty() && statusData.length > 20) {
-                val dec = ApiClientFactory.decryptData(statusData)
-                if (dec.isNotEmpty()) {
-                    val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                    val obj = json.decodeFromString<kotlinx.serialization.json.JsonObject>(dec)
-                    dailyId = obj["daily_id"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content } ?: ""
-                }
-            }
-            if (dailyId.isEmpty()) return Result.failure(Exception("无法获取签到ID"))
+            val dailyId = getDailyId(uid).getOrElse { return Result.failure(it) }
+            if (dailyId.isEmpty()) return Result.failure(Exception("今天已签到"))
 
             // 步骤2: POST /daily_chk 提交签到
             val chkResp = apiService.dailyCheckIn(uid, dailyId)
             if (!chkResp.isSuccess()) return Result.failure(Exception(chkResp.errorMessage()))
+            var responseMessage = chkResp.message
             val chkData = when (val d = chkResp.data) {
                 is kotlinx.serialization.json.JsonPrimitive -> d.content
                 else -> null
@@ -128,14 +115,47 @@ class UserRepository(
                         val obj = json.decodeFromString<kotlinx.serialization.json.JsonObject>(dec)
                         val msg = obj["msg"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
                             ?: obj["message"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
-                        if (!msg.isNullOrEmpty()) return Result.success(msg)
-                        return Result.success(dec.take(100))
+                        if (!msg.isNullOrEmpty()) responseMessage = msg
+                        else responseMessage = dec.take(100)
                     } catch (_: Exception) {
-                        return Result.success(dec.take(100))
+                        responseMessage = dec.take(100)
                     }
                 }
             }
-            Result.success(chkResp.message.ifEmpty { "签到成功" })
+
+            // 步骤3: 再次读取状态确认签到是否真的完成，避免 code=200 但实际未签到的假成功。
+            val remainingDailyId = getDailyId(uid).getOrElse {
+                return Result.failure(Exception("签到状态确认失败：${it.message ?: "未知错误"}"))
+            }
+            if (remainingDailyId.isEmpty()) {
+                Result.success(responseMessage.ifBlank { "签到成功" })
+            } else {
+                Result.failure(Exception(responseMessage.ifBlank { "签到未确认，请稍后重试" }))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun getDailyId(uid: String): Result<String> {
+        return try {
+            val statusResp = apiService.dailyStatus(uid)
+            if (!statusResp.isSuccess()) return Result.failure(Exception(statusResp.errorMessage()))
+            val statusData = when (val d = statusResp.data) {
+                is kotlinx.serialization.json.JsonPrimitive -> d.content
+                else -> null
+            }
+            if (statusData.isNullOrEmpty() || statusData.length <= 20) {
+                return Result.success("")
+            }
+            val dec = ApiClientFactory.decryptData(statusData)
+            if (dec.isEmpty()) return Result.success("")
+            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+            val obj = json.decodeFromString<kotlinx.serialization.json.JsonObject>(dec)
+            val dailyId = obj["daily_id"]?.let {
+                (it as? kotlinx.serialization.json.JsonPrimitive)?.content
+            }.orEmpty()
+            Result.success(dailyId)
         } catch (e: Exception) {
             Result.failure(e)
         }
